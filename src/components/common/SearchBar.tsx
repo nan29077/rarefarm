@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { BellOff } from "lucide-react";
 import { CustomIcon } from "@/components/common/CustomIcon";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,20 @@ export function SearchBar({
   const router = useRouter();
   const { isLoggedIn, ready } = useAuth();
   const [q, setQ] = useState("");
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [notifOpen]);
+
   return (
     <div
       className={cn(
@@ -44,18 +59,7 @@ export function SearchBar({
           className="w-full bg-transparent text-sm outline-none placeholder:text-neutral-400"
         />
       </form>
-      {withBell && (
-        <button
-          type="button"
-          onClick={() => router.push("/mypage/settings")}
-          className="relative shrink-0 rounded-xl p-1 text-neutral-700"
-          aria-label="알림"
-        >
-          <CustomIcon name="rf-alarm" size={24} className="h-6 w-6" />
-          <span className="absolute right-1.5 top-1 h-2 w-2 rounded-full border border-white bg-brand-500" />
-        </button>
-      )}
-      {/* 비로그인 시에만 로그인 버튼 노출 (하이드레이션 완료 후) */}
+      {/* 비로그인 시에만 로그인 버튼 노출 (하이드레이션 완료 후, 벨 버튼 왼쪽) */}
       {ready && !isLoggedIn && (
         <Link
           href="/login"
@@ -63,6 +67,31 @@ export function SearchBar({
         >
           로그인
         </Link>
+      )}
+      {withBell && (
+        <div ref={notifRef} className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setNotifOpen((prev) => !prev)}
+            className="relative rounded-xl p-1 text-neutral-700"
+            aria-label="알림"
+            aria-expanded={notifOpen}
+          >
+            <CustomIcon name="rf-alarm" size={24} className="h-6 w-6" />
+            <span className="absolute right-1.5 top-1 h-2 w-2 rounded-full border border-white bg-brand-500" />
+          </button>
+          {notifOpen && (
+            <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-2xl border border-neutral-100 bg-white shadow-lg">
+              <div className="border-b border-neutral-100 px-4 py-3">
+                <span className="text-sm font-semibold text-neutral-800">알림</span>
+              </div>
+              <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-neutral-400">
+                <BellOff size={32} strokeWidth={1.5} />
+                <span className="text-sm">알림이 없습니다</span>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
