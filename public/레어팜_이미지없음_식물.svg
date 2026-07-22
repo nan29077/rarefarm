@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg data-dc-tpl="949" id="ni-plant" viewBox="0 0 300 300" data-om-id="b6b460de:954" style="width: 100%; height: auto; display: block;" xmlns="http://www.w3.org/2000/svg">
+              <rect data-dc-tpl="950" x="8" y="8" width="284" height="284" rx="30" fill="#F5FAF3" stroke="#9CC0A6" stroke-width="3.5" stroke-dasharray="12 11" data-om-id="b6b460de:955"/>
+              <g data-dc-tpl="951" transform="translate(150 120)" data-om-id="b6b460de:956">
+                <path data-dc-tpl="952" d="M0 40 C-6 -6 -34 -18 -52 -14 C-46 24 -18 40 0 42" fill="#12885F" stroke="#0B3D2E" stroke-width="4" stroke-linejoin="round" data-om-id="b6b460de:957"/>
+                <path data-dc-tpl="953" d="M0 40 C6 -6 34 -18 52 -14 C46 24 18 40 0 42" fill="#0E6B4F" stroke="#0B3D2E" stroke-width="4" stroke-linejoin="round" data-om-id="b6b460de:958"/>
+                <path data-dc-tpl="954" d="M0 46 C-3 -8 0 -40 4 -58 C14 -34 12 6 4 44" fill="#2FB37A" stroke="#0B3D2E" stroke-width="4" stroke-linejoin="round" data-om-id="b6b460de:959"/>
+                <path data-dc-tpl="955" d="M0 44 L0 -50" stroke="#0B3D2E" stroke-width="3" opacity=".5" data-om-id="b6b460de:960"/>
+              </g>
+              <g data-dc-tpl="956" transform="translate(150 176)" data-om-id="b6b460de:961">
+                <path data-dc-tpl="957" d="M-46 0 L46 0 L36 52 Q34 60 26 60 L-26 60 Q-34 60 -36 52 Z" fill="#E0A836" stroke="#0B3D2E" stroke-width="4.5" stroke-linejoin="round" data-om-id="b6b460de:962"/>
+                <rect data-dc-tpl="958" x="-52" y="-12" width="104" height="16" rx="6" fill="#F4C95D" stroke="#0B3D2E" stroke-width="4.5" data-om-id="b6b460de:963"/>
+              </g>
+              <text data-dc-tpl="959" x="150" y="248" font-family="Pretendard,sans-serif" font-weight="800" font-size="13" letter-spacing="4" fill="#0E6B4F" text-anchor="middle" data-om-id="b6b460de:964">RAREFARM</text>
+              <text data-dc-tpl="960" x="150" y="274" font-family="Pretendard,sans-serif" font-weight="900" font-size="25" letter-spacing="-.5" fill="#0B3D2E" text-anchor="middle" data-om-id="b6b460de:965">No Image</text>
+            </svg>

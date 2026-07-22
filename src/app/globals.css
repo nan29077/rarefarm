@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand: #22c55e;
+  --brand-deep: #16a34a;
+  --gold: #c9a227;
+  --gold-light: #facc15;
+  --ink: #1a1a1a;
+  --ink-deep: #111111;
+}
+
+html,
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  color: #1a1a1a;
+  background-color: #f8fdf9;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
+}
+
+/* 스크롤바 숨김 (가로 스크롤 영역용) */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-in {
+  animation: toast-in 0.18s ease-out;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-up {
+  animation: fade-up 0.3s ease-out both;
+}
+
+/* ---- 라이브 경매 카운트다운/낙찰 연출 ---- */
+/* 10초 미만: 숫자 진동 */
+@keyframes count-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-2px); }
+  40% { transform: translateX(2px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+.animate-shake {
+  animation: count-shake 0.4s linear infinite;
+}
+
+/* 30초 미만: 깜빡임 */
+@keyframes count-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.animate-blink {
+  animation: count-blink 0.9s ease-in-out infinite;
+}
+
+/* 낙찰 모달 등장 */
+@keyframes pop-in {
+  0% { opacity: 0; transform: scale(0.6); }
+  70% { transform: scale(1.06); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.animate-pop {
+  animation: pop-in 0.45s cubic-bezier(0.22, 1.2, 0.36, 1) both;
+}
+
+/* 낙찰 트로피 광선 회전 */
+@keyframes win-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-win-spin {
+  animation: win-spin 6s linear infinite;
+}
+
+/* 낙찰 축하 파티클 낙하 */
+@keyframes confetti-fall {
+  0% { opacity: 1; transform: translateY(-10px) rotate(0deg); }
+  100% { opacity: 0; transform: translateY(90px) rotate(300deg); }
+}
+.animate-confetti {
+  animation: confetti-fall 1.6s ease-in infinite;
+}
+
+/* ---- Bottom Sheet 슬라이드업 ---- */
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.animate-sheet-up {
+  animation: sheet-up 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+/* ---- 라이브 효과: 하트/이모지 떠오르기 ---- */
+@keyframes float-up {
+  0% { opacity: 0; transform: translateY(0) scale(0.6); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-140px) scale(1.15); }
+}
+.animate-float-up {
+  animation: float-up 1.6s ease-out both;
+}
+
+/* ---- 잎맥(leaf) 패턴 ---- */
+/* 어두운 라인 패턴: 밝은 배경 위 */
+.honeycomb-dark {
+  background-image: url("data:image/svg+xml,%3Csvg width='32' height='32' viewBox='0 0 32 32' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='4' cy='4' r='1' fill='%2315803d' fill-opacity='0.08'/%3E%3Ccircle cx='20' cy='12' r='1' fill='%2315803d' fill-opacity='0.08'/%3E%3Ccircle cx='12' cy='28' r='1' fill='%2315803d' fill-opacity='0.08'/%3E%3C/svg%3E");
+}
+/* 밝은 라인 패턴: 어두운 배경 위 */
+.honeycomb-light {
+  background-image: url("data:image/svg+xml,%3Csvg width='32' height='32' viewBox='0 0 32 32' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='4' cy='4' r='1' fill='%23ffffff' fill-opacity='0.12'/%3E%3Ccircle cx='20' cy='12' r='1' fill='%23ffffff' fill-opacity='0.12'/%3E%3Ccircle cx='12' cy='28' r='1' fill='%23ffffff' fill-opacity='0.12'/%3E%3C/svg%3E");
+}
+/* 그린 패턴: 흰 배경 위 */
+.honeycomb-gold {
+  background-image: url("data:image/svg+xml,%3Csvg width='32' height='32' viewBox='0 0 32 32' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='4' cy='4' r='1' fill='%2322c55e' fill-opacity='0.15'/%3E%3Ccircle cx='20' cy='12' r='1' fill='%2322c55e' fill-opacity='0.15'/%3E%3Ccircle cx='12' cy='28' r='1' fill='%2322c55e' fill-opacity='0.15'/%3E%3C/svg%3E");
+}
+
+/* 육각형 클리핑 (카테고리 타일, 아이콘 배경 등) */
+.hex-clip {
+  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+}
+
+/* 라인형 아이콘 통일: lucide 기본 stroke 사용 */
+svg {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

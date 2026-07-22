@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg data-dc-tpl="966" id="ni-rep" viewBox="0 0 300 300" data-om-id="b6b460de:971" style="width: 100%; height: auto; display: block;" xmlns="http://www.w3.org/2000/svg">
+              <rect data-dc-tpl="967" x="8" y="8" width="284" height="284" rx="30" fill="#F5FAF3" stroke="#9CC0A6" stroke-width="3.5" stroke-dasharray="12 11" data-om-id="b6b460de:972"/>
+              <g data-dc-tpl="968" transform="translate(150 128) scale(1.15)" data-om-id="b6b460de:973">
+                <g data-dc-tpl="969" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#0B3D2E" stroke-width="21" data-om-id="b6b460de:974">
+                  <path data-dc-tpl="970" d="M-8 -14 L-44 -34" data-om-id="b6b460de:975"/><path data-dc-tpl="971" d="M8 -12 L44 -32" data-om-id="b6b460de:976"/><path data-dc-tpl="972" d="M-6 28 L-40 46" data-om-id="b6b460de:977"/><path data-dc-tpl="973" d="M12 28 L48 44" data-om-id="b6b460de:978"/>
+                  <path data-dc-tpl="974" d="M0 -42 C0 -4 -2 18 6 38 C14 56 40 60 52 40 C61 24 51 6 36 12 C27 16 26 26 31 32" data-om-id="b6b460de:979"/>
+                </g>
+                <g data-dc-tpl="975" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#2FB37A" stroke-width="13" data-om-id="b6b460de:980">
+                  <path data-dc-tpl="976" d="M-8 -14 L-44 -34" data-om-id="b6b460de:981"/><path data-dc-tpl="977" d="M8 -12 L44 -32" data-om-id="b6b460de:982"/><path data-dc-tpl="978" d="M-6 28 L-40 46" data-om-id="b6b460de:983"/><path data-dc-tpl="979" d="M12 28 L48 44" data-om-id="b6b460de:984"/>
+                  <path data-dc-tpl="980" d="M0 -42 C0 -4 -2 18 6 38 C14 56 40 60 52 40 C61 24 51 6 36 12 C27 16 26 26 31 32" data-om-id="b6b460de:985"/>
+                </g>
+                <ellipse data-dc-tpl="981" cx="0" cy="-44" rx="25" ry="22" fill="#2FB37A" stroke="#0B3D2E" stroke-width="5" data-om-id="b6b460de:986"/>
+                <circle data-dc-tpl="982" cx="-10" cy="-48" r="6" fill="#0B3D2E" data-om-id="b6b460de:987"/><circle data-dc-tpl="983" cx="10" cy="-48" r="6" fill="#0B3D2E" data-om-id="b6b460de:988"/>
+                <circle data-dc-tpl="984" cx="4" cy="4" r="4.5" fill="#F4C95D" data-om-id="b6b460de:989"/><circle data-dc-tpl="985" cx="19" cy="28" r="4" fill="#F4C95D" data-om-id="b6b460de:990"/>
+              </g>
+              <text data-dc-tpl="986" x="150" y="248" font-family="Pretendard,sans-serif" font-weight="800" font-size="13" letter-spacing="4" fill="#0E6B4F" text-anchor="middle" data-om-id="b6b460de:991">RAREFARM</text>
+              <text data-dc-tpl="987" x="150" y="274" font-family="Pretendard,sans-serif" font-weight="900" font-size="25" letter-spacing="-.5" fill="#0B3D2E" text-anchor="middle" data-om-id="b6b460de:992">No Image</text>
+            </svg>

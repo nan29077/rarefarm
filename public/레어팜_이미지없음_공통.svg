@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg data-dc-tpl="993" id="ni-rf" viewBox="0 0 300 300" data-om-id="b6b460de:998" style="width: 100%; height: auto; display: block;" xmlns="http://www.w3.org/2000/svg">
+              <rect data-dc-tpl="994" x="8" y="8" width="284" height="284" rx="30" fill="#F5FAF3" stroke="#9CC0A6" stroke-width="3.5" stroke-dasharray="12 11" data-om-id="b6b460de:999"/>
+              <g data-dc-tpl="995" transform="translate(150 118)" data-om-id="b6b460de:1000">
+                <path data-dc-tpl="996" d="M0 -58 C-40 -38 -46 26 -8 60 C30 46 48 -10 20 -50 C13 -38 9 -26 6 -12" fill="#F4C95D" stroke="#0B3D2E" stroke-width="4.5" stroke-linejoin="round" data-om-id="b6b460de:1001"/>
+                <path data-dc-tpl="997" d="M0 -58 C-2 -14 -6 26 -8 58" fill="none" stroke="#0B3D2E" stroke-width="3.5" stroke-linecap="round" data-om-id="b6b460de:1002"/>
+                <path data-dc-tpl="998" d="M50 -46 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 z" fill="#0E6B4F" data-om-id="b6b460de:1003"/>
+              </g>
+              <text data-dc-tpl="999" x="150" y="248" font-family="Pretendard,sans-serif" font-weight="800" font-size="13" letter-spacing="4" fill="#0E6B4F" text-anchor="middle" data-om-id="b6b460de:1004">RAREFARM</text>
+              <text data-dc-tpl="1000" x="150" y="274" font-family="Pretendard,sans-serif" font-weight="900" font-size="25" letter-spacing="-.5" fill="#0B3D2E" text-anchor="middle" data-om-id="b6b460de:1005">No Image</text>
+            </svg>

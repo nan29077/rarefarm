@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg data-dc-tpl="339" id="fulld-2a" viewBox="0 0 520 176" data-om-id="2e451774:343" style="width: 100%; height: auto;" xmlns="http://www.w3.org/2000/svg">
+            
+            <defs data-dc-tpl="341" data-om-id="2e451774:345"><linearGradient data-dc-tpl="342" id="rf-ringDL" x1="0" y1="0" x2="1" y2="1" data-om-id="2e451774:346"><stop data-dc-tpl="343" offset="0" stop-color="#F4C95D" data-om-id="2e451774:347"/><stop data-dc-tpl="344" offset="1" stop-color="#D9A22E" data-om-id="2e451774:348"/></linearGradient><linearGradient data-dc-tpl="345" id="rf-leafDL" x1="0" y1="0" x2="0" y2="1" data-om-id="2e451774:349"><stop data-dc-tpl="346" offset="0" stop-color="#F4C95D" data-om-id="2e451774:350"/><stop data-dc-tpl="347" offset="1" stop-color="#E0A836" data-om-id="2e451774:351"/></linearGradient></defs>
+            <g data-dc-tpl="348" transform="translate(6 16) scale(0.72)" data-om-id="2e451774:352">
+              <circle data-dc-tpl="349" cx="100" cy="100" r="86" fill="none" stroke="url(#rf-ringDL)" stroke-width="7" data-om-id="2e451774:353"/>
+              <circle data-dc-tpl="350" cx="100" cy="100" r="74" fill="#0E2A20" data-om-id="2e451774:354"/>
+              <path data-dc-tpl="351" d="M100 44 C66 60 60 118 90 150 C124 138 140 88 116 52 C110 62 106 72 104 84" fill="url(#rf-leafDL)" stroke="#08251B" stroke-width="4" stroke-linejoin="round" data-om-id="2e451774:355"/>
+              <path data-dc-tpl="352" d="M100 44 C98 84 92 122 90 150" fill="none" stroke="#08251B" stroke-width="3.5" stroke-linecap="round" data-om-id="2e451774:356"/>
+              <path data-dc-tpl="353" d="M56 52 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 z" fill="#F4C95D" data-om-id="2e451774:357"/>
+            </g>
+            <text data-dc-tpl="354" x="170" y="98" font-family="Pretendard,sans-serif" font-weight="900" font-size="56" letter-spacing="-2" fill="#fff" data-om-id="2e451774:358">레어팜</text>
+            <text data-dc-tpl="355" x="173" y="132" font-family="Pretendard,sans-serif" font-weight="800" font-size="16" letter-spacing="6" fill="#F4C95D" data-om-id="2e451774:359">RAREFARM</text>
+          </svg>
