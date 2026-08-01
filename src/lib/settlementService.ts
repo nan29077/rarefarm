@@ -2,6 +2,7 @@
 
 import type { Settlement, SettlementStatus, DeliveryMethod, WithdrawAccount } from "@/types";
 import { getState, update } from "./store";
+import { authHeaders, jsonAuthHeaders } from "./apiClient";
 
 export const settlementStatusLabels: Record<SettlementStatus, string> = {
   pending_payment: "결제 대기",
@@ -19,6 +20,35 @@ export const deliveryMethodLabels: Record<DeliveryMethod, string> = {
 };
 
 export const settlementService = {
+  /**
+   * 서버(.live-data/settlements.json)의 정산 데이터를 로컬 store에 병합한다.
+   * 정산은 서버 파일이 단일 기준이라 관리자·판매자·구매자 화면이 같은 데이터를 본다.
+   * 필터 없이 호출하면 전체 조회(관리자 전용)다.
+   */
+  async syncFromServer(params?: { sellerId?: string; buyerId?: string }): Promise<boolean> {
+    try {
+      const qs = new URLSearchParams();
+      if (params?.sellerId) qs.set("sellerId", params.sellerId);
+      if (params?.buyerId) qs.set("buyerId", params.buyerId);
+      const res = await fetch(`/api/settlement/create?${qs.toString()}`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) return false;
+      const { settlements } = (await res.json()) as { settlements: Settlement[] };
+      if (!Array.isArray(settlements)) return false;
+      update((s) => {
+        settlements.forEach((sv) => {
+          const idx = s.settlements.findIndex((x) => x.id === sv.id);
+          if (idx >= 0) s.settlements[idx] = sv; // 서버가 기준
+          else s.settlements.push(sv);
+        });
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
   getSettlementsForSeller(sellerId: string): Settlement[] {
     return getState()
       .settlements.filter((s) => s.sellerId === sellerId)
@@ -46,7 +76,7 @@ export const settlementService = {
     try {
       const res = await fetch("/api/settlement/pay", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({ settlementId, buyerId }),
       });
       const data = await res.json();
@@ -72,7 +102,7 @@ export const settlementService = {
     try {
       const res = await fetch("/api/settlement/ship", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({ settlementId, sellerId, deliveryMethod, trackingNumber, meetupLocation }),
       });
       const data = await res.json();
@@ -99,7 +129,7 @@ export const settlementService = {
     try {
       const res = await fetch("/api/settlement/confirm", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({ settlementId, buyerId }),
       });
       const data = await res.json();
@@ -122,7 +152,7 @@ export const settlementService = {
     try {
       const res = await fetch("/api/settlement/withdraw", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({ sellerId, withdrawAccount: account }),
       });
       const data = await res.json();

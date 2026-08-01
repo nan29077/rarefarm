@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverStore } from "@/lib/serverStore";
+import { isAdmin, requireUser } from "@/lib/apiAuth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs"; // Edge 런타임 방지 — 파일 I/O 필요
@@ -9,6 +10,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const auth = requireUser(req);
+  if (auth.response) return auth.response;
+
   try {
     const { id } = params;
     const { seconds } = (await req.json()) as { seconds: number };
@@ -19,6 +23,11 @@ export async function POST(
     const lives = serverStore.getLives();
     const live = lives[id];
     if (!live) return NextResponse.json({ error: "live not found" }, { status: 404 });
+
+    // 시간 연장은 방송 주인(판매자) 또는 관리자만 가능
+    if (live.sellerId !== auth.requester.userId && !isAdmin(auth.requester)) {
+      return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
+    }
 
     const items = serverStore.getItems();
     const currentItem = items[live.itemIds[live.currentItemIndex]];

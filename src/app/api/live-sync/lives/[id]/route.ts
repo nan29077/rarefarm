@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { serverStore } from "@/lib/serverStore";
+import { serverStore, toPublicLive } from "@/lib/serverStore";
+import { isAdmin, requireUser } from "@/lib/apiAuth";
 import type { AuctionItem, LiveAuction } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -10,12 +11,21 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const auth = requireUser(req);
+  if (auth.response) return auth.response;
+
   try {
     const { id } = params;
     const patch = await req.json() as Partial<LiveAuction> & { items?: AuctionItem[] };
 
     const existing = serverStore.getLives()[id];
     const { items: patchItems, ...livePatch } = patch;
+
+    // 방송 주인(판매자) 또는 관리자만 수정 가능
+    const ownerId = existing?.sellerId ?? livePatch.sellerId;
+    if (ownerId !== auth.requester.userId && !isAdmin(auth.requester)) {
+      return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
+    }
 
     let updated: LiveAuction;
     if (existing) {
@@ -34,7 +44,7 @@ export async function PATCH(
     }
 
     serverStore.broadcast("live_update", {
-      live: updated,
+      live: toPublicLive(updated),
       items: patchItems ?? [],
     });
     return NextResponse.json({ ok: true });
@@ -45,12 +55,19 @@ export async function PATCH(
 
 // DELETE - 라이브 종료 처리 및 파일에서 제거
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const auth = requireUser(req);
+  if (auth.response) return auth.response;
+
   const { id } = params;
   const live = serverStore.getLives()[id];
   if (live) {
+    // 방송 주인(판매자) 또는 관리자만 종료 가능
+    if (live.sellerId !== auth.requester.userId && !isAdmin(auth.requester)) {
+      return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
+    }
     serverStore.broadcast("live_ended", { liveId: id });
     serverStore.deleteLive(id);
     serverStore.clearChats(id); // 라이브 종료 시 채팅 기록 삭제

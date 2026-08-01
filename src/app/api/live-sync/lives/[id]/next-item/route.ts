@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { serverStore } from "@/lib/serverStore";
+import { serverStore, toPublicLive } from "@/lib/serverStore";
+import { isAdmin, requireUser } from "@/lib/apiAuth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs"; // Edge 런타임 방지 — 파일 I/O 필요
@@ -9,13 +10,21 @@ const DEFAULT_AUCTION_SEC = 300; // 판매자 설정 없을 때 폴백 (5분)
 // POST - 판매자 수동으로 다음 상품으로 이동
 // 현재 active/sold/failed 상품을 건너뛰고 다음 waiting 상품을 live 상태로 전환
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const auth = requireUser(req);
+  if (auth.response) return auth.response;
+
   const { id } = params;
   const lives = serverStore.getLives();
   const live = lives[id];
   if (!live) return NextResponse.json({ error: "live not found" }, { status: 404 });
+
+  // 상품 전환은 방송 주인(판매자) 또는 관리자만 가능
+  if (live.sellerId !== auth.requester.userId && !isAdmin(auth.requester)) {
+    return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
+  }
 
   const items = serverStore.getItems();
 
@@ -48,7 +57,7 @@ export async function POST(
   const allItems = live.itemIds
     .map((iid) => serverStore.getItems()[iid])
     .filter(Boolean);
-  serverStore.broadcast("live_update", { live, items: allItems });
+  serverStore.broadcast("live_update", { live: toPublicLive(live), items: allItems });
 
   return NextResponse.json({ ok: true, newIndex });
 }

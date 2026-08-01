@@ -78,6 +78,13 @@ export default function MyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  // 정산 데이터는 서버 파일이 기준 — 다른 브라우저에서 낙찰된 건도 여기서 보이도록 동기화
+  useEffect(() => {
+    if (!user) return;
+    settlementService.syncFromServer({ buyerId: user.id });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   if (!user) return <MobileShell><div className="p-10" /></MobileShell>;
 
   const asks = marketService.getAsksForUser(user.id);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverStore } from "@/lib/serverStore";
+import { isAdmin, requireUser } from "@/lib/apiAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,19 +17,34 @@ if (!global.__yt_poll_videos_rf) global.__yt_poll_videos_rf = new Map();
 
 // POST: YouTube 채팅 폴링 시작 (이미 실행 중이면 스킵)
 export async function POST(req: NextRequest) {
-  const { liveId, videoId, apiKey } = await req.json();
+  // 폴링 시작은 방송 주인(판매자) 또는 관리자만 가능
+  const auth = requireUser(req);
+  if (auth.response) return auth.response;
 
-  if (!liveId || !videoId || !apiKey) {
+  const { liveId, videoId, apiKey: reqApiKey } = await req.json();
+
+  if (!liveId || !videoId) {
     return NextResponse.json({ error: "missing params" }, { status: 400 });
   }
 
-  // apiKey를 serverStore의 live에 저장 (다른 브라우저도 사용 가능하도록)
+  const currentLive = serverStore.getLives()[liveId];
+  if (currentLive && currentLive.sellerId !== auth.requester.userId && !isAdmin(auth.requester)) {
+    return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
+  }
+
+  // 판매자가 보낸 apiKey는 serverStore의 live에만 저장하고 응답으로는 절대 내보내지 않는다.
   // 키가 변경된 경우에도 최신 키로 갱신 (구버전 키가 서버에 남아 폴링 실패하는 문제 방지)
-  if (apiKey) {
-    const currentLive = serverStore.getLives()[liveId];
-    if (currentLive && currentLive.youtubeApiKey !== apiKey) {
-      serverStore.setLive({ ...currentLive, youtubeApiKey: apiKey });
-    }
+  if (reqApiKey && currentLive && currentLive.youtubeApiKey !== reqApiKey) {
+    serverStore.setLive({ ...currentLive, youtubeApiKey: reqApiKey });
+  }
+
+  // 실제 사용할 키: 서버 환경변수 우선 → 서버에 저장된 판매자 키 → 이번 요청 키
+  const apiKey =
+    process.env.YOUTUBE_API_KEY ||
+    reqApiKey ||
+    serverStore.getLives()[liveId]?.youtubeApiKey;
+  if (!apiKey) {
+    return NextResponse.json({ error: "YouTube API 키가 설정되지 않았습니다." }, { status: 400 });
   }
 
   // 이미 같은 영상으로 폴링 중이면 중복 시작 방지
@@ -178,6 +194,9 @@ export async function POST(req: NextRequest) {
 
 // DELETE: YouTube 채팅 폴링 중지 (라이브 종료 시)
 export async function DELETE(req: NextRequest) {
+  const auth = requireUser(req);
+  if (auth.response) return auth.response;
+
   let liveId = req.nextUrl.searchParams.get("liveId") ?? "";
   if (!liveId) {
     try {
@@ -186,6 +205,13 @@ export async function DELETE(req: NextRequest) {
     } catch { /* noop */ }
   }
   if (!liveId) return NextResponse.json({ error: "missing liveId" }, { status: 400 });
+
+  // 폴링 중지도 방송 주인(판매자) 또는 관리자만 가능
+  const live = serverStore.getLives()[liveId];
+  if (live && live.sellerId !== auth.requester.userId && !isAdmin(auth.requester)) {
+    return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
+  }
+
   const interval = global.__yt_polls_rf.get(liveId);
   if (interval) clearInterval(interval);
   global.__yt_polls_rf.delete(liveId);

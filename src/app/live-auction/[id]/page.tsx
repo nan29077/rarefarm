@@ -49,8 +49,10 @@ import {
   extractYouTubeId,
   maskNickname,
   durationLabel,
+  pickWinningBid,
 } from "@/lib/auctionService";
 import { couponService, couponDiscountLabel } from "@/lib/couponService";
+import { authHeaders, jsonAuthHeaders } from "@/lib/apiClient";
 import { marketService } from "@/lib/marketService";
 import { useStoreVersion } from "@/lib/useStore";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -97,6 +99,8 @@ export default function LiveAuctionDetailPage() {
   const isPaused = live?.status === "paused";
   const ongoing = isLive || isPaused;
   const currentItem = live && ongoing ? items[live.currentItemIndex] : undefined;
+  // 호스트(판매자/방송자) 여부 — 낙찰 확정·방송 제어는 호스트 브라우저에서만 실행된다
+  const isHost = !!user && !!live && live.sellerId === user.id;
 
   const [simBids, setSimBids] = useState<AuctionBid[]>([]);
   const [endsAt, setEndsAt] = useState<number | null>(null);
@@ -220,20 +224,23 @@ export default function LiveAuctionDetailPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
 
-  // ── 레어팜: YouTube 채팅 폴링 시작 ──
+  // ── 레어팜: YouTube 채팅 폴링 시작 (호스트 전용) ──
+  // API 키는 판매자 본인 브라우저에만 있고 서버에만 저장된다. 시청자에게는 내려가지 않으며,
+  // 시청자용 폴링은 서버(SSE 연결 시)가 저장된 키로 알아서 시작한다.
   useEffect(() => {
+    if (!isHost) return;
     if (!live || live.platform !== "youtube" || live.status !== "live") return;
     const videoId = extractYouTubeId(live.videoUrl);
     if (!videoId) return;
-    const apiKey = live.youtubeApiKey || couponService.getSellerYoutubeApiKey(live.sellerId);
+    const apiKey = couponService.getSellerYoutubeApiKey(live.sellerId);
     if (!apiKey) return;
     fetch("/api/live-sync/yt-chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonAuthHeaders(),
       body: JSON.stringify({ liveId: live.id, videoId, apiKey }),
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.id, liveStatus, live?.youtubeApiKey, live?.videoUrl]);
+  }, [params.id, liveStatus, live?.videoUrl, isHost]);
 
   // ── 레어팜: 3초 채팅 폴링 폴백 (SSE 미수신 보완) ──
   useEffect(() => {
@@ -313,6 +320,7 @@ export default function LiveAuctionDetailPage() {
   }, []);
 
   const storeBids = currentItem ? auctionService.getBidsForItem(currentItem.id) : [];
+  // 표시용 입찰 목록 — 봇(시뮬레이션) 입찰 포함 (분위기 연출)
   const allBids = [...storeBids, ...simBids].sort((a, b) =>
     b.createdAt.localeCompare(a.createdAt)
   );
@@ -320,27 +328,56 @@ export default function LiveAuctionDetailPage() {
     (top, b) => (top === null || b.price > top.price ? b : top),
     null
   );
+  // 낙찰 판정용 최고 입찰 — 봇 제외, 실제 사용자 입찰만. 동가면 먼저 입찰한 사람 우선.
+  const topRealBid = currentItem ? pickWinningBid(storeBids, currentItem.id) : null;
   const currentPrice = Math.max(currentItem?.currentPrice ?? 0, topBid?.price ?? 0);
   const isTopBidder = !!user && topBid?.userId === user.id;
   const isOwnItem = !!user && currentItem?.sellerId === user.id;
 
   const remainSec = endsAt ? Math.max(0, Math.ceil((endsAt - now) / 1000)) : 0;
 
+  // ── 낙찰 확정 (호스트 전용) ──────────────────────────────────────
+  // 시청자 브라우저마다 실행되면 정산이 중복 생성되므로 판매자(호스트)만 확정한다.
+  // 시청자는 아래 "낙찰 결과 수신" effect에서 서버 동기화 결과만 표시한다.
   useEffect(() => {
+    if (!isHost) return;
     if (!live || live.status !== "live" || !currentItem || !endsAt) return;
+    if (currentItem.status !== "live") return; // 즉시 낙찰 등으로 이미 종료된 상품
     if (remainSec > 0 || finalizedRef.current) return;
     finalizedRef.current = true;
-    const winner = topBid ? { name: topBid.bidderName, price: topBid.price } : null;
     const itemName = currentItem.name;
     const finishedItem = currentItem;
-    auctionService.finalizeCurrentItemOnly(live.id, winner);
-    if (winner) {
-      setWinnerInfo({ itemName, winnerName: winner.name, price: winner.price, mine: topBid?.userId === user?.id, item: finishedItem });
+    // 실제 사용자 입찰만으로 낙찰자 판정 (봇 입찰만 있으면 유찰)
+    const { winnerBid } = auctionService.finalizeCurrentItem(live.id, true);
+    if (winnerBid) {
+      setWinnerInfo({ itemName, winnerName: winnerBid.bidderName, price: winnerBid.price, mine: winnerBid.userId === user?.id, item: finishedItem });
     } else {
       setFailedNotice(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remainSec, live?.status, currentItemId]);
+  }, [remainSec, live?.status, currentItemId, isHost]);
+
+  // ── 낙찰 결과 수신 (시청자) ───────────────────────────────────────
+  // 호스트가 확정한 결과가 서버 동기화로 내려오면 낙찰/유찰 안내를 표시한다.
+  const resultShownRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (isHost || !currentItem) return;
+    if (currentItem.status !== "sold" && currentItem.status !== "failed") return;
+    if (resultShownRef.current === currentItem.id) return;
+    resultShownRef.current = currentItem.id;
+    if (currentItem.status === "sold" && currentItem.winnerName) {
+      const price = currentItem.finalPrice ?? currentItem.currentPrice;
+      const mine =
+        !!user &&
+        auctionService
+          .getBidsForItem(currentItem.id)
+          .some((b) => b.userId === user.id && b.price === price);
+      setWinnerInfo({ itemName: currentItem.name, winnerName: currentItem.winnerName, price, mine, item: currentItem });
+    } else {
+      setFailedNotice(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentItem?.status, currentItemId, isHost]);
 
   useEffect(() => {
     if (!winnerInfo) return;
@@ -414,15 +451,11 @@ export default function LiveAuctionDetailPage() {
       }
       auctionService.placeBid(live.id, currentItem.id, user, price);
       setJoined(true);
+      // 마감 직전 연장은 서버(/api/live-sync/bids)가 처리하고 item_update로 브로드캐스트한다.
+      // 여기서는 안내만 띄우고 실제 종료 시각은 서버 값으로 동기화된다.
       if (endsAt && endsAt - Date.now() < LAST_MINUTE_SEC * 1000) {
-        const extEndTime = Date.now() + EXTEND_SEC * 1000;
-        setEndsAt(extEndTime);
+        setEndsAt(Date.now() + EXTEND_SEC * 1000);
         toast(`마감 직전 입찰! 경매 시간이 ${EXTEND_SEC}초 연장되었습니다.`, "info");
-        fetch(`/api/live-sync/lives/${live.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items: [{ ...currentItem, endTime: extEndTime }] }),
-        }).catch(() => {});
       }
       toast(`${formatPrice(price)} 입찰 완료!`);
     },
@@ -448,18 +481,20 @@ export default function LiveAuctionDetailPage() {
   function sendChat() {
     if (!live) return;
     if (live.chatEnabled === false) return toast("판매자가 채팅을 금지한 방송입니다.", "error");
+    // 서버가 세션을 검증하므로 미로그인 상태면 로그인으로 보낸다
+    if (!requireAuth() || !user) return;
     const text = chatInput.trim();
     if (!text) return;
     const banned = (live.chatFilterWords ?? []).find(
       (w) => w && text.toLowerCase().includes(w.toLowerCase())
     );
     if (banned) return toast("금칙어가 포함되어 전송할 수 없습니다.", "error");
-    const chatMsg = { id: Date.now(), name: user?.nickname ?? "게스트", text, source: "app" as const };
+    const chatMsg = { id: Date.now(), name: user.nickname, text, source: "app" as const };
     setChats((prev) => [...prev, { ...chatMsg, mine: true }].slice(-40));
     setChatInput("");
     fetch("/api/live-sync/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonAuthHeaders(),
       body: JSON.stringify({ liveId: live.id, chat: chatMsg }),
     }).catch(() => {});
   }
@@ -575,7 +610,6 @@ export default function LiveAuctionDetailPage() {
   const viewers = Math.max(1, live.viewers + viewerDrift);
   const chatDisabled = !isLive || live.chatEnabled === false;
   const showFixedCta = isLive && !!currentItem && !currentItem.suspended && !isOwnItem;
-  const isHost = !!user && live.sellerId === user.id;
   const allItemsDone = ongoing && items.length > 0 && !currentItem;
 
   function endBroadcast() {
@@ -606,7 +640,7 @@ export default function LiveAuctionDetailPage() {
     if (!isHost || !live?.id) return;
     const res = await fetch(`/api/live-sync/lives/${live.id}/extend`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonAuthHeaders(),
       body: JSON.stringify({ seconds }),
     }).catch(() => null);
     if (res?.ok) {
@@ -617,21 +651,25 @@ export default function LiveAuctionDetailPage() {
   };
   const moveToNextItem = async () => {
     if (!isHost || !live?.id) return;
-    await fetch(`/api/live-sync/lives/${live.id}/next-item`, { method: "POST" }).catch(() => {});
+    await fetch(`/api/live-sync/lives/${live.id}/next-item`, {
+      method: "POST",
+      headers: authHeaders(),
+    }).catch(() => {});
     toast("다음 상품으로 이동했습니다.", "info");
   };
   const forceSettle = () => {
     if (!live || !currentItem || !isHost) return;
-    if (!topBid) return toast("입찰 내역이 없어 즉시 낙찰할 수 없습니다.", "error");
-    const winner = { name: topBid.bidderName, price: topBid.price };
+    // 봇 입찰은 낙찰 대상이 아니므로 실제 사용자 입찰이 있어야 즉시 낙찰 가능
+    if (!topRealBid) return toast("실제 입찰 내역이 없어 즉시 낙찰할 수 없습니다.", "error");
     const itemName = currentItem.name;
     const finishedItem = currentItem;
-    auctionService.finalizeCurrentItemOnly(live.id, winner);
-    setWinnerInfo({ itemName, winnerName: winner.name, price: winner.price, mine: topBid.userId === user?.id, item: finishedItem });
+    const { winnerBid } = auctionService.finalizeCurrentItem(live.id, true);
+    if (!winnerBid) return toast("실제 입찰 내역이 없어 즉시 낙찰할 수 없습니다.", "error");
+    setWinnerInfo({ itemName, winnerName: winnerBid.bidderName, price: winnerBid.price, mine: winnerBid.userId === user?.id, item: finishedItem });
   };
   const forceUnsold = () => {
     if (!live || !currentItem || !isHost) return;
-    auctionService.finalizeCurrentItemOnly(live.id, null);
+    auctionService.finalizeCurrentItem(live.id, false);
     setFailedNotice(true);
   };
 
@@ -868,7 +906,7 @@ export default function LiveAuctionDetailPage() {
                   {/* 레어팜: 즉시 낙찰 / 유찰 처리 */}
                   <div className="grid grid-cols-2 gap-2">
                     <button onClick={forceSettle}
-                      disabled={!isLive || !currentItem || currentItem.status !== "live" || !topBid}
+                      disabled={!isLive || !currentItem || currentItem.status !== "live" || !topRealBid}
                       className="flex items-center justify-center gap-1 rounded-xl bg-brand-400 py-2 text-[11px] font-bold text-black hover:bg-brand-300 disabled:cursor-not-allowed disabled:opacity-40">
                       즉시 낙찰
                     </button>

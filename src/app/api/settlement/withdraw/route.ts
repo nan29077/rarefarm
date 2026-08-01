@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverStore } from "@/lib/serverStore";
+import { requireSelf } from "@/lib/apiAuth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -10,6 +11,9 @@ export async function POST(req: NextRequest) {
     if (!sellerId || !withdrawAccount?.bankName || !withdrawAccount?.accountNumber || !withdrawAccount?.accountHolder) {
       return NextResponse.json({ error: "sellerId, withdrawAccount 필요" }, { status: 400 });
     }
+    // body의 sellerId가 요청자 본인인지 세션으로 검증
+    const auth = requireSelf(req, sellerId);
+    if (auth.response) return auth.response;
     const settlements = serverStore.getSettlementsBySeller(sellerId);
     const withdrawable = settlements.filter((s) => s.status === "withdrawable");
     if (withdrawable.length === 0) return NextResponse.json({ error: "출금 가능한 정산이 없습니다." }, { status: 400 });

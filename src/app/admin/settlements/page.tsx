@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CreditCard,
   Clock,
@@ -18,7 +18,7 @@ import {
 } from "@/components/admin/AdminUI";
 import { auctionService } from "@/lib/auctionService";
 import { marketService } from "@/lib/marketService";
-import { settlementStatusLabels } from "@/lib/settlementService";
+import { settlementService, settlementStatusLabels } from "@/lib/settlementService";
 import { useStoreVersion } from "@/lib/useStore";
 import { getState } from "@/lib/store";
 import { formatPrice } from "@/lib/utils";
@@ -46,6 +46,14 @@ export default function AdminSettlementsPage() {
   useStoreVersion();
   const settlements = getState().settlements;
   const [statusFilter, setStatusFilter] = useState<SettlementStatus | "all">("all");
+
+  // 정산 데이터는 서버 파일(.live-data/settlements.json)이 기준.
+  // 자기 브라우저 localStorage가 아니라 서버에서 전체 정산을 읽어온다 (관리자 권한 필요).
+  useEffect(() => {
+    settlementService.syncFromServer();
+    const t = setInterval(() => settlementService.syncFromServer(), 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   // 통계 계산
   const totalSaleAmount = settlements.reduce((sum, s) => sum + s.salePrice, 0);

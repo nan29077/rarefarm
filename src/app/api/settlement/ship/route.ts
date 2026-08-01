@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverStore } from "@/lib/serverStore";
+import { requireSelf } from "@/lib/apiAuth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -8,6 +9,9 @@ export async function POST(req: NextRequest) {
   try {
     const { settlementId, sellerId, deliveryMethod, trackingNumber, meetupLocation } = await req.json();
     if (!settlementId || !sellerId || !deliveryMethod) return NextResponse.json({ error: "필수 필드 누락" }, { status: 400 });
+    // body의 sellerId가 요청자 본인인지 세션으로 검증
+    const auth = requireSelf(req, sellerId);
+    if (auth.response) return auth.response;
     const settlement = serverStore.getSettlements().find((s) => s.id === settlementId);
     if (!settlement) return NextResponse.json({ error: "정산 레코드를 찾을 수 없습니다." }, { status: 404 });
     if (settlement.sellerId !== sellerId) return NextResponse.json({ error: "권한 없음" }, { status: 403 });

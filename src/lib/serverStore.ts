@@ -16,6 +16,20 @@ export interface ChatMessage {
   source?: "app" | "youtube";
 }
 
+/**
+ * 클라이언트로 내려보낼 라이브 객체.
+ * youtubeApiKey는 서버 전용 비밀값이라 SSE/GET 응답에서 반드시 제거한다.
+ */
+export function toPublicLive(live: LiveAuction): LiveAuction {
+  const copy = { ...live };
+  delete copy.youtubeApiKey;
+  return copy;
+}
+
+export function toPublicLives(lives: LiveAuction[]): LiveAuction[] {
+  return lives.map(toPublicLive);
+}
+
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 function readJSON<T>(file: string, defaultVal: T): T {
@@ -101,6 +115,31 @@ export const serverStore = {
     const list = this.getSettlements();
     list.push(settlement);
     writeJSON(SETTLEMENTS_FILE, list);
+  },
+  /** 같은 상품(itemId)에 대한 정산 — 낙찰 중복 생성 차단용 */
+  findSettlementByItem(itemId: string): Settlement | undefined {
+    return this.getSettlements().find((s) => s.itemId === itemId);
+  },
+  /**
+   * 조회 시점에 자동 구매확정(배송 15일 경과) / 결제기한 만료를 서버 데이터에 반영.
+   * 클라이언트별 localStorage가 아니라 서버 파일이 기준이 되도록 한다.
+   */
+  sweepSettlements() {
+    const now = Date.now();
+    const list = this.getSettlements();
+    let changed = false;
+    list.forEach((sv) => {
+      if (sv.status === "shipping" && sv.autoConfirmAt && sv.autoConfirmAt < now) {
+        sv.status = "withdrawable";
+        sv.confirmedAt = now;
+        changed = true;
+      } else if (sv.status === "pending_payment" && sv.paymentDeadline < now) {
+        sv.status = "cancelled";
+        changed = true;
+      }
+    });
+    if (changed) writeJSON(SETTLEMENTS_FILE, list);
+    return list;
   },
   updateSettlement(id: string, updates: Partial<Settlement>) {
     const list = this.getSettlements();

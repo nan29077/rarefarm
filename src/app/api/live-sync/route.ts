@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { serverStore } from "@/lib/serverStore";
+import { serverStore, toPublicLives } from "@/lib/serverStore";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs"; // Edge 런타임 방지 — 파일 I/O 필요
@@ -29,10 +29,12 @@ export async function GET(req: NextRequest) {
     (/^(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(host) ? "http" : "https");
   const livesMap = serverStore.getLives();
   for (const live of Object.values(livesMap)) {
+    // apiKey는 서버 환경변수 우선, 없으면 서버에 저장된 판매자 키 사용 (클라이언트로는 절대 나가지 않음)
+    const apiKey = process.env.YOUTUBE_API_KEY || live.youtubeApiKey;
     if (
       live.status === "live" &&
       live.platform === "youtube" &&
-      live.youtubeApiKey &&
+      apiKey &&
       live.videoUrl
     ) {
       const videoId = extractVideoIdFromUrl(live.videoUrl);
@@ -40,8 +42,12 @@ export async function GET(req: NextRequest) {
       if (videoId && (!global.__yt_polls_rf.has(live.id) || global.__yt_poll_videos_rf.get(live.id) !== videoId)) {
         fetch(`${protocol}://${host}/api/live-sync/yt-chat`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ liveId: live.id, videoId, apiKey: live.youtubeApiKey }),
+          headers: {
+            "Content-Type": "application/json",
+            // 서버 내부 호출 — 판매자 세션으로 처리
+            "X-User-Id": live.sellerId,
+          },
+          body: JSON.stringify({ liveId: live.id, videoId }),
         }).catch(() => {});
       }
     }
@@ -58,8 +64,8 @@ export async function GET(req: NextRequest) {
         }
       };
 
-      // 연결 즉시 파일에서 현재 서버 상태 읽어서 전송
-      const lives = Object.values(serverStore.getLives());
+      // 연결 즉시 파일에서 현재 서버 상태 읽어서 전송 (youtubeApiKey 제거)
+      const lives = toPublicLives(Object.values(serverStore.getLives()));
       const items = Object.values(serverStore.getItems());
       const bids = serverStore.getBids();
       const chats = serverStore.getAllChats();

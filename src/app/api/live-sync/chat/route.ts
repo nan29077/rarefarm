@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverStore } from "@/lib/serverStore";
+import { requireUser } from "@/lib/apiAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // POST: 채팅 메시지 수신 후 모든 SSE 클라이언트에 브로드캐스트
 export async function POST(req: NextRequest) {
+  // 세션 검증 — 미로그인 채팅 차단
+  const auth = requireUser(req);
+  if (auth.response) return auth.response;
+
   const { liveId, chat } = await req.json();
 
   if (!liveId || !chat?.id || !chat?.text) {

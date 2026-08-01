@@ -81,6 +81,12 @@ export default function SellerDashboardPage() {
     settlementService.checkExpiredPayments();
   }, []);
 
+  // 정산 데이터는 서버 파일이 기준 — 다른 브라우저에서 낙찰된 건도 여기서 보이도록 동기화
+  useEffect(() => {
+    if (!user) return;
+    settlementService.syncFromServer({ sellerId: user.id });
+  }, [user]);
+
   const showToast = useCallback((msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
