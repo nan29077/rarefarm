@@ -41,6 +41,7 @@ import {
   LayoutDashboard,
 } from "lucide-react";
 import { SellerLayout } from "@/components/seller/SellerLayout";
+import { YoutubeAccountPanel } from "@/components/seller/YoutubeAccountPanel";
 import { Panel, StatusPill, ActionButton } from "@/components/admin/AdminUI";
 import { Button } from "@/components/common/Button";
 import { Badge } from "@/components/common/Badge";
@@ -783,6 +784,7 @@ function SettingsPanel({ sellerId, coupons }: { sellerId: string; coupons: LiveC
 
       {/* ===== YouTube 설정 서브탭 ===== */}
       {subTab === "youtube" && (
+        <>
         <SettingsSection
           icon={<Youtube className="h-4 w-4 text-red-500" strokeWidth={1.75} />}
           title="YouTube 라이브 채팅 연동"
@@ -880,6 +882,11 @@ function SettingsPanel({ sellerId, coupons }: { sellerId: string; coupons: LiveC
             </div>
           </div>
         </SettingsSection>
+        {/* ── 서버 저장 방식 YouTube 계정/API 키 설정 (추가) ── */}
+        <div className="mt-4">
+          <YoutubeAccountPanel />
+        </div>
+        </>
       )}
 
       {/* ===== 쿠폰 서브탭 ===== */}

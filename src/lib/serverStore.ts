@@ -14,6 +14,10 @@ export interface ChatMessage {
   name: string;
   text: string;
   source?: "app" | "youtube";
+  // ---- YouTube 라이브 채팅 연동 (선택) ----
+  isYoutube?: boolean; // YouTube에서 가져온 메시지 여부 (채팅 UI의 YT 배지 표시용)
+  ytMessageId?: string; // YouTube 원본 메시지 ID (중복 방지용)
+  createdAt?: string; // YouTube 메시지 작성 시각 (ISO)
 }
 
 /**

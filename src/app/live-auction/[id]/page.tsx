@@ -71,7 +71,13 @@ interface ChatMsg {
   name: string;
   text: string;
   source?: "app" | "youtube";
+  isYoutube?: boolean; // YouTube 채팅 통합(youtube-sync)으로 들어온 메시지
   mine?: boolean;
+}
+
+/** YouTube 출처 메시지 여부 (source / isYoutube 어느 쪽으로 와도 인식) */
+function isYoutubeChat(c: ChatMsg): boolean {
+  return c.source === "youtube" || c.isYoutube === true;
 }
 
 interface WinnerInfo {
@@ -146,7 +152,7 @@ export default function LiveAuctionDetailPage() {
           lives: import("@/types").LiveAuction[];
           items: import("@/types").AuctionItem[];
           bids: import("@/types").AuctionBid[];
-          chats: Record<string, Array<{ id: string | number; name: string; text: string; source?: "app" | "youtube" }>>;
+          chats: Record<string, Array<{ id: string | number; name: string; text: string; source?: "app" | "youtube"; isYoutube?: boolean }>>;
         };
         auctionService.applyServerSync({ lives, items, bids });
         const liveMsgs = serverChats?.[lId];
@@ -155,7 +161,7 @@ export default function LiveAuctionDetailPage() {
             const existingIds = new Set(prev.map((c) => String(c.id)));
             const newMsgs = liveMsgs
               .filter((c) => !existingIds.has(String(c.id)))
-              .map((c) => ({ id: c.id, name: c.name, text: c.text, source: c.source }));
+              .map((c) => ({ id: c.id, name: c.name, text: c.text, source: c.source, isYoutube: c.isYoutube }));
             liveMsgs.forEach((c) => seenChatIds.current.add(String(c.id)));
             return newMsgs.length ? [...prev, ...newMsgs].slice(-40) : prev;
           });
@@ -181,7 +187,7 @@ export default function LiveAuctionDetailPage() {
         } else if (event === "chat") {
           const { liveId: msgLiveId, chat } = data as {
             liveId: string;
-            chat: { id: string | number; name: string; text: string; source?: "app" | "youtube" };
+            chat: { id: string | number; name: string; text: string; source?: "app" | "youtube"; isYoutube?: boolean };
           };
           if (msgLiveId === lId) {
             const chatId = String(chat.id);
@@ -189,7 +195,7 @@ export default function LiveAuctionDetailPage() {
             seenChatIds.current.add(chatId);
             setChats((prev) => {
               if (prev.find((c) => String(c.id) === chatId)) return prev;
-              return [...prev, { id: chat.id, name: chat.name, text: chat.text, source: chat.source ?? "app" }].slice(-40);
+              return [...prev, { id: chat.id, name: chat.name, text: chat.text, source: chat.source ?? "app", isYoutube: chat.isYoutube }].slice(-40);
             });
           }
         } else if (event === "yt_chat") {
@@ -242,6 +248,29 @@ export default function LiveAuctionDetailPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id, liveStatus, live?.videoUrl, isHost]);
 
+  // ── YouTube 채팅 통합 동기화 (호스트 전용 · 방송 중에만) ──
+  // 호스트 브라우저가 5초마다 /api/live-sync/youtube-sync 를 호출하면 서버가 YouTube 채팅을
+  // 가져와 라이브 채팅에 { isYoutube: true } 로 합치고 SSE로 브로드캐스트한다.
+  // 사용 키는 서버가 판매자 설정(users.json)에서 찾아 쓰므로 클라이언트로 키가 나가지 않는다.
+  useEffect(() => {
+    if (!isHost) return;
+    if (!live || live.platform !== "youtube" || live.status !== "live") return;
+    const videoId = extractYouTubeId(live.videoUrl);
+    if (!videoId) return;
+
+    const sync = () => {
+      fetch("/api/live-sync/youtube-sync", {
+        method: "POST",
+        headers: jsonAuthHeaders(),
+        body: JSON.stringify({ liveId: live.id, videoId }),
+      }).catch(() => {});
+    };
+    sync();
+    const timer = setInterval(sync, 5000);
+    return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id, liveStatus, live?.videoUrl, isHost]);
+
   // ── 레어팜: 3초 채팅 폴링 폴백 (SSE 미수신 보완) ──
   useEffect(() => {
     if (!params.id) return;
@@ -250,7 +279,7 @@ export default function LiveAuctionDetailPage() {
         const r = await fetch(`/api/live-sync/chats?liveId=${params.id}`);
         if (!r.ok) return;
         const { chats: serverChats } = await r.json() as {
-          chats: Array<{ id: string | number; name: string; text: string; source?: "app" | "youtube" }>;
+          chats: Array<{ id: string | number; name: string; text: string; source?: "app" | "youtube"; isYoutube?: boolean }>;
         };
         if (!serverChats?.length) return;
         const unseen = serverChats.filter((c) => !seenChatIds.current.has(String(c.id)));
@@ -262,7 +291,7 @@ export default function LiveAuctionDetailPage() {
           if (!newChats.length) return prev;
           return [
             ...prev,
-            ...newChats.map((c) => ({ id: c.id, name: c.name, text: c.text, source: c.source, mine: false as const })),
+            ...newChats.map((c) => ({ id: c.id, name: c.name, text: c.text, source: c.source, isYoutube: c.isYoutube, mine: false as const })),
           ].slice(-40);
         });
       } catch { /* noop */ }
@@ -1278,7 +1307,7 @@ export default function LiveAuctionDetailPage() {
       <div className="pointer-events-none absolute bottom-[155px] left-3 right-16 z-10 space-y-1">
         {chats.slice(-4).map((c) => (
           <p key={String(c.id)} className="line-clamp-1 flex items-center gap-1 text-[12px] leading-relaxed drop-shadow">
-            {c.source === "youtube" ? (
+            {isYoutubeChat(c) ? (
               <span className="inline-flex flex-shrink-0 items-center gap-0.5 rounded bg-red-600 px-1 py-0.5 text-[10px] font-bold text-white">
                 <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
                 YT
@@ -1287,7 +1316,7 @@ export default function LiveAuctionDetailPage() {
               <span className="inline-flex flex-shrink-0 items-center rounded bg-green-500 px-1 py-0.5 text-[10px] font-bold text-white">레어팜</span>
             )}
             <span className={cn("font-bold", c.mine ? "text-brand-400" : "text-white/70")}>
-              {c.source === "youtube" ? c.name : (c.mine ? c.name : maskNickname(c.name))}
+              {isYoutubeChat(c) ? c.name : (c.mine ? c.name : maskNickname(c.name))}
             </span>
             <span className="text-white">{c.text}</span>
           </p>
@@ -1691,7 +1720,7 @@ export default function LiveAuctionDetailPage() {
             className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-4 py-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:w-1">
             {chats.map((c) => (
               <p key={String(c.id)} className="animate-in flex flex-wrap items-center gap-1 text-[13px] leading-relaxed">
-                {c.source === "youtube" ? (
+                {isYoutubeChat(c) ? (
                   <span className="inline-flex flex-shrink-0 items-center gap-0.5 rounded bg-red-600 px-1 py-0.5 text-[10px] font-bold text-white">
                     <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" /></svg>
                     YT
@@ -1700,7 +1729,7 @@ export default function LiveAuctionDetailPage() {
                   <span className="inline-flex flex-shrink-0 items-center rounded bg-green-500 px-1 py-0.5 text-[10px] font-bold text-white">레어팜</span>
                 )}
                 <span className={cn("font-bold", c.mine ? "text-brand-400" : "text-neutral-400")}>
-                  {c.source === "youtube" ? c.name : (c.mine ? c.name : maskNickname(c.name))}
+                  {isYoutubeChat(c) ? c.name : (c.mine ? c.name : maskNickname(c.name))}
                 </span>
                 <span className="text-neutral-100">{c.text}</span>
               </p>
