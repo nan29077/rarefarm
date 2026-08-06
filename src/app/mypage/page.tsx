@@ -19,6 +19,7 @@ import { auctionService } from "@/lib/auctionService";
 import { couponService } from "@/lib/couponService";
 import { settlementService, settlementStatusLabels } from "@/lib/settlementService";
 import { sellerRequestService } from "@/lib/sellerRequestService";
+import { authService } from "@/lib/auth";
 import { purchases, pointHistories, coupons } from "@/lib/mockData";
 import { getState, update, resetStore, togglePickSeller } from "@/lib/store";
 import { useStoreVersion } from "@/lib/useStore";
@@ -65,6 +66,11 @@ export default function MyPage() {
   const [pwNew2, setPwNew2] = useState("");
   // 알림 설정 (mock)
   const [notif, setNotif] = useState({ bid: true, live: true, marketing: false });
+  const [settlementNow, setSettlementNow] = useState(Date.now());
+  const [payLoading, setPayLoading] = useState(false);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [payTarget, setPayTarget] = useState<Settlement | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<Settlement | null>(null);
 
   useEffect(() => {
     if (ready && !user) router.replace("/login");
@@ -85,6 +91,16 @@ export default function MyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  useEffect(() => {
+    const timer = setInterval(() => setSettlementNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    settlementService.checkAutoConfirm();
+    settlementService.checkExpiredPayments();
+  }, []);
+
   if (!user) return <MobileShell><div className="p-10" /></MobileShell>;
 
   const asks = marketService.getAsksForUser(user.id);
@@ -98,11 +114,6 @@ export default function MyPage() {
   const grade = totalSpent >= 500000 ? "VIP" : totalSpent >= 100000 ? "단골" : "새내기";
   const participations = auctionService.getParticipationsForUser(user.id);
   const mySettlements = settlementService.getSettlementsForBuyer(user.id);
-  const [settlementNow, setSettlementNow] = useState(Date.now());
-  const [payLoading, setPayLoading] = useState(false);
-  const [confirmLoading, setConfirmLoading] = useState(false);
-  const [payTarget, setPayTarget] = useState<Settlement | null>(null);
-  const [confirmTarget, setConfirmTarget] = useState<Settlement | null>(null);
 
   const myPosts = communityService.getPosts("mine", user.id);
   const myComments = getState()
@@ -196,23 +207,22 @@ export default function MyPage() {
     toast("내 정보가 수정되었습니다.");
   }
 
-  function changePassword() {
+  async function changePassword() {
     if (!user) return;
     if (!pwCur) return toast("현재 비밀번호를 입력해주세요.", "error");
-    if (user.password && pwCur !== user.password)
-      return toast("현재 비밀번호가 일치하지 않습니다.", "error");
-    if (pwNew.length < 4)
-      return toast("새 비밀번호는 4자 이상 입력해주세요.", "error");
+    if (pwNew.length < 8)
+      return toast("새 비밀번호는 8자 이상 입력해주세요.", "error");
     if (pwNew !== pwNew2)
       return toast("새 비밀번호가 서로 일치하지 않습니다.", "error");
-    update((s) => {
-      const u = s.users.find((x) => x.id === user.id);
-      if (u) u.password = pwNew;
-    });
-    setPwCur("");
-    setPwNew("");
-    setPwNew2("");
-    toast("비밀번호가 변경되었습니다.");
+    try {
+      await authService.changePassword(pwCur, pwNew);
+      setPwCur("");
+      setPwNew("");
+      setPwNew2("");
+      toast("비밀번호가 변경되었습니다.");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "비밀번호를 변경할 수 없습니다.", "error");
+    }
   }
 
   // 6개 메뉴 카드
@@ -231,16 +241,6 @@ export default function MyPage() {
     { key: "posts", label: "내 글/댓글" },
   ];
 
-
-  useEffect(() => {
-    const t = setInterval(() => setSettlementNow(Date.now()), 30_000);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    settlementService.checkAutoConfirm();
-    settlementService.checkExpiredPayments();
-  }, []);
 
   async function handlePay(sv: Settlement) {
     setPayLoading(true);
@@ -548,7 +548,7 @@ export default function MyPage() {
                         sv.status === "pending_payment" ? "bg-amber-100 text-amber-700"
                         : sv.status === "payment_done" ? "bg-neutral-100 text-neutral-600"
                         : sv.status === "shipping" ? "bg-blue-50 text-blue-600"
-                        : sv.status === "withdrawable" || sv.status === "withdrawn" ? "bg-green-50 text-green-700"
+                        : sv.status === "withdrawable" || sv.status === "withdrawal_requested" || sv.status === "withdrawn" ? "bg-green-50 text-green-700"
                         : "bg-red-50 text-red-600"
                       )}>
                         {settlementStatusLabels[sv.status] ?? sv.status}

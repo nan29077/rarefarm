@@ -251,20 +251,22 @@ export function LoginForm() {
           </button>
         )}
 
-        <Button
-          fullWidth
-          variant="secondary"
-          size="sm"
-          className="mt-3"
-          onClick={() => handleTest("buyer")}
-          disabled={loading}
-        >
-          구매자 테스트 로그인
-        </Button>
+        {process.env.NODE_ENV !== "production" && (
+          <Button
+            fullWidth
+            variant="secondary"
+            size="sm"
+            className="mt-3"
+            onClick={() => handleTest("buyer")}
+            disabled={loading}
+          >
+            구매자 테스트 로그인
+          </Button>
+        )}
       </div>
 
       {/* 테스트 계정 */}
-      <div className="mt-4 rounded-xl border border-dashed border-brand-300 bg-brand-50/60 p-3">
+      {process.env.NODE_ENV !== "production" && <div className="mt-4 rounded-xl border border-dashed border-brand-300 bg-brand-50/60 p-3">
         <p className="mb-2 flex items-center gap-1 text-xs font-semibold text-brand-800">
           <ShieldCheck className="h-3.5 w-3.5" /> 테스트 계정 바로 로그인
         </p>
@@ -286,7 +288,7 @@ export function LoginForm() {
           <br />
           구매자: buyer@rarefarm.kr / Buyer1234!
         </p>
-      </div>
+      </div>}
     </div>
   );
 }

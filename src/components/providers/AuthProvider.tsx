@@ -44,8 +44,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    setUser(authService.getCurrentUser());
-    setReady(true);
+    let mounted = true;
+    authService.restoreSession().then((restored) => {
+      if (!mounted) return;
+      setUser(restored);
+      setReady(true);
+    });
+    return () => { mounted = false; };
   }, []);
 
   const loginEmail = useCallback(async (email: string, pw: string) => {

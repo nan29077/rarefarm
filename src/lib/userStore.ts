@@ -1,5 +1,7 @@
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { decryptSensitive, encryptSensitive } from "./sensitiveData";
 
 // 유저별 YouTube 설정 저장소 (서버 전용).
 // 이 프로젝트는 DB가 없고 .live-data/*.json 파일로 데이터를 관리하므로
@@ -19,6 +21,9 @@ export interface UserProfile {
   youtubeTokenExpiry?: string; // ISO
   youtubeChannelId?: string;
   youtubeChannelTitle?: string;
+  youtubeApiKeyEncrypted?: string;
+  youtubeAccessTokenEncrypted?: string;
+  youtubeRefreshTokenEncrypted?: string;
 }
 
 /** 클라이언트로 내려보낼 안전한 형태 (비밀값은 마스킹/불리언으로 변환) */
@@ -47,12 +52,10 @@ function readUsers(): UserProfile[] {
 }
 
 function writeUsers(users: UserProfile[]) {
-  try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), "utf-8");
-  } catch {
-    /* noop */
-  }
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  const temp = `${USERS_FILE}.${process.pid}.${crypto.randomBytes(6).toString("hex")}.tmp`;
+  fs.writeFileSync(temp, JSON.stringify(users, null, 2), { encoding: "utf-8", mode: 0o600 });
+  fs.renameSync(temp, USERS_FILE);
 }
 
 /** API 키 마스킹 — 앞 4자 + 뒤 4자만 노출 */
@@ -66,11 +69,15 @@ export function toPublicYoutubeSettings(
   userId: string,
   profile?: UserProfile | null
 ): PublicYoutubeSettings {
+  const apiKey =
+    profile?.youtubeApiKey ?? decryptSensitive<string>(profile?.youtubeApiKeyEncrypted);
+  const accessToken =
+    profile?.youtubeAccessToken ?? decryptSensitive<string>(profile?.youtubeAccessTokenEncrypted);
   return {
     userId,
-    hasApiKey: !!profile?.youtubeApiKey,
-    apiKeyMasked: maskKey(profile?.youtubeApiKey),
-    connected: !!profile?.youtubeAccessToken && !!profile?.youtubeChannelId,
+    hasApiKey: !!apiKey,
+    apiKeyMasked: maskKey(apiKey),
+    connected: !!accessToken && !!profile?.youtubeChannelId,
     channelId: profile?.youtubeChannelId ?? null,
     channelTitle: profile?.youtubeChannelTitle ?? null,
     tokenExpiry: profile?.youtubeTokenExpiry ?? null,
@@ -83,7 +90,14 @@ export const userStore = {
   },
 
   get(userId: string): UserProfile | undefined {
-    return readUsers().find((u) => u.userId === userId);
+    const stored = readUsers().find((u) => u.userId === userId);
+    if (!stored) return undefined;
+    return {
+      ...stored,
+      youtubeApiKey: decryptSensitive<string>(stored.youtubeApiKeyEncrypted) ?? stored.youtubeApiKey,
+      youtubeAccessToken: decryptSensitive<string>(stored.youtubeAccessTokenEncrypted) ?? stored.youtubeAccessToken,
+      youtubeRefreshToken: decryptSensitive<string>(stored.youtubeRefreshTokenEncrypted) ?? stored.youtubeRefreshToken,
+    };
   },
 
   /** 부분 갱신 (없으면 새로 생성) */
@@ -100,7 +114,10 @@ export const userStore = {
 
   /** YouTube Data API 키 저장 (빈 문자열이면 삭제) */
   saveApiKey(userId: string, apiKey: string): UserProfile {
-    return this.upsert(userId, { youtubeApiKey: apiKey || undefined });
+    return this.upsert(userId, {
+      youtubeApiKey: undefined,
+      youtubeApiKeyEncrypted: apiKey ? encryptSensitive(apiKey) : undefined,
+    });
   },
 
   /** OAuth 토큰 + 채널 정보 저장 */
@@ -116,9 +133,15 @@ export const userStore = {
   ): UserProfile {
     const prev = this.get(userId);
     return this.upsert(userId, {
-      youtubeAccessToken: auth.accessToken,
+      youtubeAccessToken: undefined,
+      youtubeAccessTokenEncrypted: encryptSensitive(auth.accessToken),
       // 재연동 시 Google이 refresh_token을 다시 안 주는 경우가 있어 기존 값을 유지한다
-      youtubeRefreshToken: auth.refreshToken || prev?.youtubeRefreshToken,
+      youtubeRefreshToken: undefined,
+      youtubeRefreshTokenEncrypted: auth.refreshToken
+        ? encryptSensitive(auth.refreshToken)
+        : prev?.youtubeRefreshToken
+          ? encryptSensitive(prev.youtubeRefreshToken)
+          : undefined,
       youtubeTokenExpiry: auth.expiryDate,
       youtubeChannelId: auth.channelId ?? prev?.youtubeChannelId,
       youtubeChannelTitle: auth.channelTitle ?? prev?.youtubeChannelTitle,
@@ -130,6 +153,8 @@ export const userStore = {
     return this.upsert(userId, {
       youtubeAccessToken: undefined,
       youtubeRefreshToken: undefined,
+      youtubeAccessTokenEncrypted: undefined,
+      youtubeRefreshTokenEncrypted: undefined,
       youtubeTokenExpiry: undefined,
       youtubeChannelId: undefined,
       youtubeChannelTitle: undefined,

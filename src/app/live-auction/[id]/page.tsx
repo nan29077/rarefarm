@@ -62,7 +62,8 @@ import type { AuctionBid, AuctionItem, LiveAuction, LiveCoupon } from "@/types";
 
 const SIM_BIDDERS = ["건담매니아", "레고홀릭", "피규어킹", "프라덕후", "카드왕", "브릭러버"];
 
-const DEFAULT_ITEM_DURATION = 300;
+const DEFAULT_ITEM_DURATION = 90;
+const SIMULATED_BIDDING_ENABLED = false;
 const LAST_MINUTE_SEC = 10;
 const EXTEND_SEC = 30;
 
@@ -350,7 +351,7 @@ export default function LiveAuctionDetailPage() {
 
   const storeBids = currentItem ? auctionService.getBidsForItem(currentItem.id) : [];
   // 표시용 입찰 목록 — 봇(시뮬레이션) 입찰 포함 (분위기 연출)
-  const allBids = [...storeBids, ...simBids].sort((a, b) =>
+  const allBids = [...storeBids, ...(SIMULATED_BIDDING_ENABLED ? simBids : [])].sort((a, b) =>
     b.createdAt.localeCompare(a.createdAt)
   );
   const topBid = allBids.reduce<AuctionBid | null>(
@@ -377,12 +378,13 @@ export default function LiveAuctionDetailPage() {
     const itemName = currentItem.name;
     const finishedItem = currentItem;
     // 실제 사용자 입찰만으로 낙찰자 판정 (봇 입찰만 있으면 유찰)
-    const { winnerBid } = auctionService.finalizeCurrentItem(live.id, true);
-    if (winnerBid) {
-      setWinnerInfo({ itemName, winnerName: winnerBid.bidderName, price: winnerBid.price, mine: winnerBid.userId === user?.id, item: finishedItem });
-    } else {
-      setFailedNotice(true);
-    }
+    void auctionService.finalizeCurrentItem(live.id, true, { advanceToNext: true }).then(({ winnerBid }) => {
+      if (winnerBid) {
+        setWinnerInfo({ itemName, winnerName: winnerBid.bidderName, price: winnerBid.price, mine: winnerBid.userId === user?.id, item: finishedItem });
+      } else {
+        setFailedNotice(true);
+      }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remainSec, live?.status, currentItemId, isHost]);
 
@@ -421,7 +423,7 @@ export default function LiveAuctionDetailPage() {
   }, [failedNotice]);
 
   useEffect(() => {
-    if (!liveId || liveStatus !== "live") return;
+    if (!SIMULATED_BIDDING_ENABLED || !liveId || liveStatus !== "live") return;
     let timer: ReturnType<typeof setTimeout>;
     let alive = true;
     const tick = () => {
@@ -464,7 +466,7 @@ export default function LiveAuctionDetailPage() {
   }, [liveId, liveStatus]);
 
   const placeBid = useCallback(
-    (price: number) => {
+    async (price: number) => {
       if (!live || !currentItem) return;
       if (!requireAuth() || !user) return;
       if (currentItem.suspended) { setSuspendedModal(true); return; }
@@ -478,7 +480,8 @@ export default function LiveAuctionDetailPage() {
         setBuyNowConfirm(true);
         return;
       }
-      auctionService.placeBid(live.id, currentItem.id, user, price);
+      const result = await auctionService.placeBid(live.id, currentItem.id, user, price);
+      if (!result.ok) return toast(result.error ?? "입찰을 처리하지 못했습니다.", "error");
       setJoined(true);
       // 마감 직전 연장은 서버(/api/live-sync/bids)가 처리하고 item_update로 브로드캐스트한다.
       // 여기서는 안내만 띄우고 실제 종료 시각은 서버 값으로 동기화된다.
@@ -491,7 +494,7 @@ export default function LiveAuctionDetailPage() {
     [live, currentItem, currentPrice, requireAuth, user, toast, endsAt]
   );
 
-  function handleBuyNow() {
+  async function handleBuyNow() {
     if (!live || !currentItem || currentItem.buyNowPrice === null) return;
     if (!requireAuth() || !user) return;
     if (currentItem.suspended) { setSuspendedModal(true); return; }
@@ -502,12 +505,16 @@ export default function LiveAuctionDetailPage() {
     const itemName = currentItem.name;
     const price = currentItem.buyNowPrice;
     const finishedItem = currentItem;
-    auctionService.buyNow(live.id, currentItem.id, user);
+    const result = await auctionService.buyNow(live.id, currentItem.id, user);
+    if (!result.ok) {
+      setBuyNowConfirm(false);
+      return toast(result.error ?? "즉시 낙찰을 처리하지 못했습니다.", "error");
+    }
     setBuyNowConfirm(false);
     setWinnerInfo({ itemName, winnerName: user.nickname, price, mine: true, item: finishedItem });
   }
 
-  function sendChat() {
+  async function sendChat() {
     if (!live) return;
     if (live.chatEnabled === false) return toast("판매자가 채팅을 금지한 방송입니다.", "error");
     // 서버가 세션을 검증하므로 미로그인 상태면 로그인으로 보낸다
@@ -518,14 +525,18 @@ export default function LiveAuctionDetailPage() {
       (w) => w && text.toLowerCase().includes(w.toLowerCase())
     );
     if (banned) return toast("금칙어가 포함되어 전송할 수 없습니다.", "error");
-    const chatMsg = { id: Date.now(), name: user.nickname, text, source: "app" as const };
-    setChats((prev) => [...prev, { ...chatMsg, mine: true }].slice(-40));
     setChatInput("");
-    fetch("/api/live-sync/chat", {
+    const response = await fetch("/api/live-sync/chat", {
       method: "POST",
       headers: jsonAuthHeaders(),
-      body: JSON.stringify({ liveId: live.id, chat: chatMsg }),
-    }).catch(() => {});
+      body: JSON.stringify({ liveId: live.id, text }),
+    }).catch(() => null);
+    if (!response?.ok) {
+      const data = await response?.json().catch(() => ({})) as { error?: string } | undefined;
+      return toast(data?.error ?? "채팅을 보내지 못했습니다.", "error");
+    }
+    const { chat } = await response.json() as { chat: ChatMsg };
+    setChats((prev) => prev.some((entry) => String(entry.id) === String(chat.id)) ? prev : [...prev, { ...chat, mine: true }].slice(-40));
   }
 
   useEffect(() => {
@@ -533,12 +544,12 @@ export default function LiveAuctionDetailPage() {
     pcChatRef.current?.scrollTo({ top: pcChatRef.current.scrollHeight });
   }, [chats]);
 
-  function onItemClick(item: AuctionItem) {
+  async function onItemClick(item: AuctionItem) {
     if (item.suspended) { setSuspendedModal(true); return; }
     if (live && user && live.sellerId === user.id && ongoing && item.status === "waiting") {
       const idx = live.itemIds.indexOf(item.id);
       if (idx >= 0 && idx !== live.currentItemIndex) {
-        auctionService.jumpToItem(live.id, idx);
+        if (!await auctionService.jumpToItem(live.id, idx)) return toast("상품을 전환하지 못했습니다.", "error");
         toast(`"${item.name}" 상품으로 진행을 변경했습니다.`);
       }
     }
@@ -641,26 +652,26 @@ export default function LiveAuctionDetailPage() {
   const showFixedCta = isLive && !!currentItem && !currentItem.suspended && !isOwnItem;
   const allItemsDone = ongoing && items.length > 0 && !currentItem;
 
-  function endBroadcast() {
+  async function endBroadcast() {
     if (!live) return;
-    auctionService.setLiveStatus(live.id, "ended");
+    if (!await auctionService.setLiveStatus(live.id, "ended")) return toast("경매를 종료하지 못했습니다.", "error");
     toast("방송을 종료했습니다. 수고하셨습니다!");
   }
-  function pauseBroadcast() {
+  async function pauseBroadcast() {
     if (!live) return;
-    auctionService.setLiveStatus(live.id, "paused");
+    if (!await auctionService.setLiveStatus(live.id, "paused")) return toast("경매를 일시정지하지 못했습니다.", "error");
     toast("방송을 일시정지했습니다.");
   }
-  function resumeBroadcast() {
+  async function resumeBroadcast() {
     if (!live) return;
-    auctionService.setLiveStatus(live.id, "live");
+    if (!await auctionService.setLiveStatus(live.id, "live")) return toast("경매를 재개하지 못했습니다.", "error");
     toast("방송을 재개했습니다.");
   }
-  function skipToNextItem() {
+  async function skipToNextItem() {
     if (!live) return;
     const nextIdx = items.findIndex((it, i) => i > live.currentItemIndex && it.status === "waiting" && !it.suspended);
     if (nextIdx === -1) return toast("전환할 다음 상품이 없습니다.", "error");
-    auctionService.jumpToItem(live.id, nextIdx);
+    if (!await auctionService.jumpToItem(live.id, nextIdx)) return toast("다음 상품으로 이동하지 못했습니다.", "error");
     toast("다음 상품으로 진행을 전환했습니다.");
   }
 
@@ -686,19 +697,19 @@ export default function LiveAuctionDetailPage() {
     }).catch(() => {});
     toast("다음 상품으로 이동했습니다.", "info");
   };
-  const forceSettle = () => {
+  const forceSettle = async () => {
     if (!live || !currentItem || !isHost) return;
     // 봇 입찰은 낙찰 대상이 아니므로 실제 사용자 입찰이 있어야 즉시 낙찰 가능
     if (!topRealBid) return toast("실제 입찰 내역이 없어 즉시 낙찰할 수 없습니다.", "error");
     const itemName = currentItem.name;
     const finishedItem = currentItem;
-    const { winnerBid } = auctionService.finalizeCurrentItem(live.id, true);
+    const { winnerBid } = await auctionService.finalizeCurrentItem(live.id, true);
     if (!winnerBid) return toast("실제 입찰 내역이 없어 즉시 낙찰할 수 없습니다.", "error");
     setWinnerInfo({ itemName, winnerName: winnerBid.bidderName, price: winnerBid.price, mine: winnerBid.userId === user?.id, item: finishedItem });
   };
-  const forceUnsold = () => {
+  const forceUnsold = async () => {
     if (!live || !currentItem || !isHost) return;
-    auctionService.finalizeCurrentItem(live.id, false);
+    await auctionService.finalizeCurrentItem(live.id, false);
     setFailedNotice(true);
   };
 

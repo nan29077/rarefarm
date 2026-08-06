@@ -11,8 +11,10 @@ import {
   Flame,
   Gavel,
   Crown,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Heart,
 } from "lucide-react";
 import { MobileShell } from "@/components/layout/MobileShell";
@@ -34,7 +36,9 @@ export default function LiveAuctionListPage() {
   const [, forceRerender] = useState(0);
   const forceUpdate = useCallback(() => forceRerender((v) => v + 1), []);
   const slideRef = useRef<HTMLDivElement>(null);
+  const slideIdxRef = useRef(0);
   const [slideIdx, setSlideIdx] = useState(0);
+  const [isLivePanelCollapsed, setIsLivePanelCollapsed] = useState(false);
 
   function scrollSlide(dir: -1 | 1) {
     if (!slideRef.current) return;
@@ -46,13 +50,20 @@ export default function LiveAuctionListPage() {
   useEffect(() => {
     const el = slideRef.current;
     if (!el) return;
+    const syncFrame = requestAnimationFrame(() => {
+      el.scrollLeft = slideIdxRef.current * el.clientWidth;
+    });
     const onScroll = () => {
       const idx = Math.round(el.scrollLeft / (el.clientWidth || 1));
+      slideIdxRef.current = idx;
       setSlideIdx(idx);
     };
     el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, []);
+    return () => {
+      cancelAnimationFrame(syncFrame);
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, [isLivePanelCollapsed]);
 
   // SSE 연결 — 서버에서 라이브 실시간 동기화
   useEffect(() => {
@@ -241,11 +252,23 @@ export default function LiveAuctionListPage() {
 
       {/* 상단 고정: 진행중 라이브 가로 슬라이드 (스크롤해도 유지) */}
       {liveNow.length > 0 && (
-        <div className="sticky top-14 z-30 border-b border-neutral-100 bg-white/95 shadow-sm backdrop-blur">
+        <div
+          id="ongoing-live-panel"
+          className="sticky top-14 z-30 border-b border-neutral-100 bg-white/95 shadow-sm backdrop-blur"
+        >
           <div className="flex items-center justify-between px-4 pb-2 pt-3">
-            <h2 className="text-[17px] font-bold text-neutral-900">지금 진행중인 라이브 경매</h2>
-            <div className="flex items-center gap-2">
-              <span className="flex items-center gap-1 text-xs font-bold text-red-500">
+            <h2 className="min-w-0 line-clamp-1 pr-2 text-[15px] font-bold text-neutral-900 sm:text-[17px]">
+              {isLivePanelCollapsed ? (
+                <>
+                  <span className="sm:hidden">진행중 라이브</span>
+                  <span className="hidden sm:inline">지금 진행중인 라이브 경매</span>
+                </>
+              ) : (
+                "지금 진행중인 라이브 경매"
+              )}
+            </h2>
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              <span className="hidden items-center gap-1 text-xs font-bold text-red-500 sm:flex">
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
@@ -258,7 +281,10 @@ export default function LiveAuctionListPage() {
                   <button
                     onClick={() => scrollSlide(-1)}
                     disabled={slideIdx === 0}
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-500 transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-30"
+                    className={cn(
+                      "h-7 w-7 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-500 transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-30",
+                      isLivePanelCollapsed ? "flex" : "hidden sm:flex"
+                    )}
                     aria-label="이전"
                   >
                     <ChevronLeft className="h-4 w-4" strokeWidth={2} />
@@ -266,42 +292,103 @@ export default function LiveAuctionListPage() {
                   <button
                     onClick={() => scrollSlide(1)}
                     disabled={slideIdx >= liveNow.length - 1}
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-500 transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-30"
+                    className={cn(
+                      "h-7 w-7 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-500 transition-colors hover:border-brand-400 hover:text-brand-600 disabled:opacity-30",
+                      isLivePanelCollapsed ? "flex" : "hidden sm:flex"
+                    )}
                     aria-label="다음"
                   >
                     <ChevronRight className="h-4 w-4" strokeWidth={2} />
                   </button>
                 </div>
               )}
+              <button
+                type="button"
+                onClick={() => setIsLivePanelCollapsed((collapsed) => !collapsed)}
+                aria-expanded={!isLivePanelCollapsed}
+                aria-controls="ongoing-live-content"
+                className="inline-flex h-8 items-center gap-0.5 rounded-lg border border-brand-200 bg-brand-50 px-2 text-xs font-bold text-brand-700 transition-colors hover:border-brand-400 hover:bg-brand-100"
+              >
+                {isLivePanelCollapsed ? (
+                  <ChevronDown className="h-4 w-4" strokeWidth={2} />
+                ) : (
+                  <ChevronUp className="h-4 w-4" strokeWidth={2} />
+                )}
+                {isLivePanelCollapsed ? "펼치기" : "접기"}
+              </button>
             </div>
           </div>
-          {/* 1개씩 snap 캐러셀 */}
-          <div ref={slideRef} className="flex snap-x snap-mandatory overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {liveNow.map((l, i) => (
-              <div key={l.id} className="w-full shrink-0 snap-start px-4 pb-3">
-                <LiveSlideCard live={l} />
+
+          <div id="ongoing-live-content">
+            {isLivePanelCollapsed ? (
+              <div
+                ref={slideRef}
+                className="flex touch-pan-x snap-x snap-mandatory overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {liveNow.map((live) => {
+                  const seller = marketService.getUser(live.sellerId);
+                  const item = auctionService.getItem(live.itemIds[live.currentItemIndex]);
+                  return (
+                    <div key={live.id} className="w-full shrink-0 snap-start px-4 pb-3">
+                      <div className="flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50/70 p-2.5">
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-red-500 px-1.5 py-1 text-[9px] font-extrabold tracking-wider text-white">
+                          <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                          LIVE
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="line-clamp-1 text-xs font-bold text-neutral-900">{live.title}</p>
+                          <p className="mt-0.5 line-clamp-1 text-[10px] text-neutral-500">
+                            {seller?.nickname ?? "판매자"}
+                            {item ? ` · ${item.name}` : ""}
+                          </p>
+                        </div>
+                        <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-neutral-500">
+                          <Eye className="h-3 w-3" strokeWidth={2} />
+                          {formatNumber(live.viewers)}
+                        </span>
+                        <Link
+                          href={`/live-auction/${live.id}`}
+                          className="shrink-0 rounded-lg bg-[#FFB800] px-2.5 py-2 text-[11px] font-bold text-black transition-[filter] hover:brightness-95 active:brightness-90"
+                        >
+                          참여
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
+            ) : (
+              <>
+                {/* 1개씩 snap 캐러셀 */}
+                <div ref={slideRef} className="flex snap-x snap-mandatory overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {liveNow.map((l) => (
+                    <div key={l.id} className="w-full shrink-0 snap-start px-4 pb-3">
+                      <LiveSlideCard live={l} />
+                    </div>
+                  ))}
+                </div>
+                {/* 점 인디케이터 */}
+                {liveNow.length > 1 && (
+                  <div className="flex justify-center gap-1.5 pb-2">
+                    {liveNow.map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          if (!slideRef.current) return;
+                          slideRef.current.scrollTo({ left: i * slideRef.current.clientWidth, behavior: "smooth" });
+                        }}
+                        aria-label={`슬라이드 ${i + 1}`}
+                        className={cn(
+                          "h-1.5 rounded-full transition-all duration-300",
+                          i === slideIdx ? "w-5 bg-brand-500" : "w-1.5 bg-neutral-300"
+                        )}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </div>
-          {/* 점 인디케이터 */}
-          {liveNow.length > 1 && (
-            <div className="flex justify-center gap-1.5 pb-2">
-              {liveNow.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => {
-                    if (!slideRef.current) return;
-                    slideRef.current.scrollTo({ left: i * slideRef.current.clientWidth, behavior: "smooth" });
-                  }}
-                  aria-label={`슬라이드 ${i + 1}`}
-                  className={cn(
-                    "h-1.5 rounded-full transition-all duration-300",
-                    i === slideIdx ? "w-5 bg-brand-500" : "w-1.5 bg-neutral-300"
-                  )}
-                />
-              ))}
-            </div>
-          )}
         </div>
       )}
 
@@ -448,7 +535,7 @@ function ItemThumb({
   );
 }
 
-// 진행중 라이브 슬라이드 카드 — YouTube 미리보기(음소거) + 참여하기 버튼
+// 진행중 라이브 슬라이드 카드 — 데스크톱은 미리보기 + 소개 2열, 모바일은 세로 배치
 function LiveSlideCard({ live }: { live: LiveAuction }) {
   useStoreVersion();
   const { user } = useAuth();
@@ -467,9 +554,9 @@ function LiveSlideCard({ live }: { live: LiveAuction }) {
   const isPaused = live.status === "paused";
   const youtubeId = live.platform === "youtube" ? extractYouTubeId(live.videoUrl) : null;
   return (
-    <div className="w-full overflow-hidden rounded-2xl border-2 border-brand-500 bg-white shadow-sm">
-      {/* 상단: 라이브 미리보기 (YouTube embed 음소거, 클릭 방지) */}
-      <div className="relative aspect-video w-full overflow-hidden rounded-t-xl bg-black">
+    <div className="flex w-full flex-col overflow-hidden rounded-2xl border-2 border-brand-500 bg-white shadow-sm md:grid md:grid-cols-[minmax(0,3fr)_minmax(190px,2fr)]">
+      {/* 라이브 미리보기 (YouTube embed 음소거, 클릭 방지) */}
+      <div className="relative aspect-video w-full overflow-hidden rounded-t-xl bg-black md:aspect-auto md:min-h-[190px] md:rounded-l-xl md:rounded-r-none">
         {youtubeId ? (
           <>
             {/* YouTube 썸네일 이미지 (iframe 폴백) */}
@@ -515,18 +602,13 @@ function LiveSlideCard({ live }: { live: LiveAuction }) {
           <Eye className="h-3 w-3" strokeWidth={2} /> {formatNumber(live.viewers)}
         </span>
       </div>
-      {/* 하단: 제목 + 판매자/현재 상품 + 참여하기 */}
-      <div className="p-3">
-        <p className="line-clamp-1 text-sm font-bold text-neutral-900">{live.title}</p>
-        <div className="mt-0.5 flex items-center gap-1.5">
+      {/* 라이브 소개 + 참여하기 */}
+      <div className="flex min-w-0 flex-col border-t border-neutral-100 p-3 md:border-l md:border-t-0 md:p-4">
+        <p className="text-[10px] font-extrabold tracking-[0.12em] text-brand-600">LIVE 소개</p>
+        <p className="mt-1 line-clamp-2 text-sm font-bold leading-snug text-neutral-900">{live.title}</p>
+        <div className="mt-1 flex items-center gap-1.5">
           <p className="min-w-0 flex-1 line-clamp-1 text-[11px] text-neutral-400">
             {seller?.nickname ?? "판매자"}
-            {currentItem && (
-              <>
-                {" · "}
-                <span className="font-medium text-neutral-600">{currentItem.name}</span>
-              </>
-            )}
           </p>
           {seller && (
             <button
@@ -542,9 +624,17 @@ function LiveSlideCard({ live }: { live: LiveAuction }) {
             </button>
           )}
         </div>
+        {currentItem && (
+          <div className="mt-2 rounded-lg bg-brand-50 px-2.5 py-2">
+            <p className="text-[9px] font-bold text-brand-700">현재 경매 상품</p>
+            <p className="mt-0.5 line-clamp-2 text-[11px] font-semibold leading-snug text-neutral-700">
+              {currentItem.name}
+            </p>
+          </div>
+        )}
         <Link
           href={`/live-auction/${live.id}`}
-          className="mt-2.5 block rounded-xl bg-[#FFB800] py-2.5 text-center text-sm font-bold text-black transition-[filter] hover:brightness-95 active:brightness-90"
+          className="mt-3 block rounded-xl bg-[#FFB800] py-2.5 text-center text-sm font-bold text-black transition-[filter] hover:brightness-95 active:brightness-90 md:mt-auto"
         >
           참여하기
         </Link>

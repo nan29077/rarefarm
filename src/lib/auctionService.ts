@@ -302,7 +302,7 @@ export const auctionService = {
       .sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt));
   },
 
-  createLive(input: {
+  async createLive(input: {
     sellerId: string;
     title: string;
     videoUrl: string;
@@ -315,7 +315,7 @@ export const auctionService = {
     itemDurations?: Record<string, number>;
     couponIds?: string[];
     badges?: string[];
-  }): LiveAuction {
+  }): Promise<LiveAuction> {
     const live: LiveAuction = {
       id: uid("live"),
       sellerId: input.sellerId,
@@ -339,21 +339,22 @@ export const auctionService = {
       couponIds: input.couponIds ?? [],
       badges: input.badges ?? [],
     };
-    update((s) => s.liveAuctions.unshift(live));
-
-    // 서버 동기화 (fire-and-forget) — 실패해도 로컬은 정상 동작
-    {
-      const relatedItems = getState().auctionItems.filter((i) =>
-        live.itemIds.includes(i.id)
-      );
-      fetch("/api/live-sync/lives", {
-        method: "POST",
-        headers: jsonAuthHeaders(),
-        body: JSON.stringify({ live, items: relatedItems }),
-      }).catch(() => {});
+    const relatedItems = getState().auctionItems.filter((item) => live.itemIds.includes(item.id));
+    const response = await fetch("/api/live-sync/lives", {
+      method: "POST",
+      headers: jsonAuthHeaders(),
+      body: JSON.stringify({ live, items: relatedItems }),
+    });
+    const data = await response.json().catch(() => ({})) as {
+      live?: LiveAuction;
+      items?: AuctionItem[];
+      error?: string;
+    };
+    if (!response.ok || !data.live) {
+      throw new Error(data.error ?? "라이브 경매를 생성할 수 없습니다.");
     }
-
-    return live;
+    this.applyServerSync({ lives: [data.live], items: data.items ?? [], bids: [] });
+    return data.live;
   },
 
   // 방송 정보 수정 (링크/채팅/공지 등 인라인 편집)
@@ -391,55 +392,40 @@ export const auctionService = {
   },
 
   // 상품별 경매 시간 설정 (실시간 조정)
-  setItemDuration(liveId: string, itemId: string, sec: number) {
+  async setItemDuration(liveId: string, itemId: string, sec: number) {
     update((s) => {
       const l = s.liveAuctions.find((x) => x.id === liveId);
       if (!l) return;
       l.itemDurations = { ...(l.itemDurations ?? {}), [itemId]: sec };
     });
+    const live = getState().liveAuctions.find((candidate) => candidate.id === liveId);
+    if (live) {
+      const response = await fetch(`/api/live-sync/lives/${liveId}`, {
+        method: "PATCH",
+        headers: jsonAuthHeaders(),
+        body: JSON.stringify({ itemDurations: live.itemDurations }),
+      });
+      return response.ok;
+    }
+    return false;
   },
 
   // 현재 진행 상품 변경 (순서 건너뛰기)
-  jumpToItem(liveId: string, index: number) {
-    update((s) => {
-      const l = s.liveAuctions.find((x) => x.id === liveId);
-      if (!l || index < 0 || index >= l.itemIds.length) return;
-      const prev = s.auctionItems.find(
-        (i) => i.id === l.itemIds[l.currentItemIndex]
-      );
-      if (prev && prev.status === "live") prev.status = "waiting";
-      l.currentItemIndex = index;
-      const next = s.auctionItems.find((i) => i.id === l.itemIds[index]);
-      if (
-        next &&
-        next.status === "waiting" &&
-        !next.suspended &&
-        (l.status === "live" || l.status === "paused")
-      ) {
-        next.status = "live";
-        // 경매 종료 시각 설정 (점프 시 리셋)
-        const dur = l.itemDurations?.[next.id] ?? next.durationSec ?? DEFAULT_AUCTION_SEC;
-        next.endTime = Date.now() + dur * 1000;
-      }
-    });
-
-    // 서버 동기화 (fire-and-forget)
-    {
-      const s = getState();
-      const updatedLive = s.liveAuctions.find((l) => l.id === liveId);
-      if (updatedLive) {
-        const relatedItems = s.auctionItems.filter((i) =>
-          updatedLive.itemIds.includes(i.id)
-        );
-        fetch(`/api/live-sync/lives/${liveId}`, {
-          method: "PATCH",
-          headers: jsonAuthHeaders(),
-          body: JSON.stringify({
-            currentItemIndex: updatedLive.currentItemIndex,
-            items: relatedItems,
-          }),
-        }).catch(() => {});
-      }
+  async jumpToItem(liveId: string, index: number): Promise<boolean> {
+    try {
+      const response = await fetch(`/api/live-sync/lives/${liveId}/jump`, {
+        method: "POST",
+        headers: jsonAuthHeaders(),
+        body: JSON.stringify({ index }),
+      });
+      const data = await response.json();
+      if (!response.ok) return false;
+      const live = data.live as LiveAuction;
+      const items = live.itemIds.map((id) => data.item?.id === id ? data.item : getState().auctionItems.find((item) => item.id === id)).filter(Boolean) as AuctionItem[];
+      this.applyServerSync({ lives: [live], items, bids: [] });
+      return true;
+    } catch {
+      return false;
     }
   },
 
@@ -477,7 +463,7 @@ export const auctionService = {
   },
 
   // 라이브 시작/일시정지/재개/종료
-  setLiveStatus(liveId: string, status: LiveAuctionStatus) {
+  setLiveStatusLegacy(liveId: string, status: LiveAuctionStatus) {
     update((s) => {
       const l = s.liveAuctions.find((x) => x.id === liveId);
       if (!l) return;
@@ -559,7 +545,31 @@ export const auctionService = {
   },
 
   // 상품 순서 이동 (위/아래)
-  moveLiveItem(liveId: string, index: number, dir: -1 | 1) {
+  async setLiveStatus(liveId: string, status: LiveAuctionStatus): Promise<boolean> {
+    try {
+      const response = await fetch(`/api/live-sync/lives/${liveId}/status`, {
+        method: "POST",
+        headers: jsonAuthHeaders(),
+        body: JSON.stringify({ status }),
+      });
+      const data = await response.json();
+      if (!response.ok) return false;
+      this.applyServerSync({ lives: [data.live], items: data.item ? [data.item] : [], bids: [] });
+      if (status === "ended") {
+        void fetch("/api/live-sync/yt-chat", {
+          method: "DELETE",
+          headers: jsonAuthHeaders(),
+          body: JSON.stringify({ liveId }),
+        });
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  async moveLiveItem(liveId: string, index: number, dir: -1 | 1): Promise<boolean> {
+    let nextOrder: string[] | null = null;
     update((s) => {
       const l = s.liveAuctions.find((x) => x.id === liveId);
       if (!l) return;
@@ -567,7 +577,19 @@ export const auctionService = {
       if (to < 0 || to >= l.itemIds.length) return;
       const arr = l.itemIds;
       [arr[index], arr[to]] = [arr[to], arr[index]];
+      nextOrder = [...arr];
     });
+    if (!nextOrder) return false;
+    try {
+      const response = await fetch(`/api/live-sync/lives/${liveId}`, {
+        method: "PATCH",
+        headers: jsonAuthHeaders(),
+        body: JSON.stringify({ itemIds: nextOrder }),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
   },
 
   // 지난 라이브 삭제 (클라이언트 store + 서버 파일 동기화)
@@ -590,7 +612,7 @@ export const auctionService = {
     return getState().auctionBids.filter((b) => b.itemId === itemId);
   },
 
-  placeBid(liveId: string, itemId: string, user: { id: string; nickname: string }, price: number) {
+  placeBidLegacy(liveId: string, itemId: string, user: { id: string; nickname: string }, price: number) {
     update((s) => {
       const item = s.auctionItems.find((x) => x.id === itemId);
       if (!item) return;
@@ -617,7 +639,7 @@ export const auctionService = {
     }
   },
 
-  buyNow(liveId: string, itemId: string, user: { id: string; nickname: string }) {
+  buyNowLegacy(liveId: string, itemId: string, user: { id: string; nickname: string }) {
     update((s) => {
       const item = s.auctionItems.find((x) => x.id === itemId);
       if (!item || item.buyNowPrice === null) return;
@@ -700,7 +722,7 @@ export const auctionService = {
    * @param opts.advanceToNext true면 다음 상품으로 인덱스 자동 이동
    *   (기본 false — 판매자가 "다음 상품" 버튼으로 수동 이동)
    */
-  finalizeCurrentItem(
+  finalizeCurrentItemLegacy(
     liveId: string,
     sold: boolean,
     opts?: { advanceToNext?: boolean }
@@ -790,6 +812,70 @@ export const auctionService = {
     }
 
     return { winnerBid, item: finalizedItem };
+  },
+
+  async placeBid(liveId: string, itemId: string, _user: { id: string; nickname: string }, price: number) {
+    return this.submitBid(liveId, itemId, "bid", price);
+  },
+
+  async buyNow(liveId: string, itemId: string, _user: { id: string; nickname: string }) {
+    return this.submitBid(liveId, itemId, "buy_now");
+  },
+
+  async submitBid(liveId: string, itemId: string, action: "bid" | "buy_now", amount?: number) {
+    try {
+      const response = await fetch("/api/live-sync/bids", {
+        method: "POST",
+        headers: jsonAuthHeaders(),
+        body: JSON.stringify({
+          liveId,
+          itemId,
+          action,
+          amount,
+          idempotencyKey: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) return { ok: false, error: data.error as string };
+      this.applyServerSync({
+        lives: data.live ? [data.live] : [],
+        items: data.item ? [data.item] : [],
+        bids: data.bid ? [data.bid] : [],
+      });
+      if (data.settlement) {
+        update((state) => {
+          if (!state.settlements.some((settlement) => settlement.id === data.settlement.id)) state.settlements.push(data.settlement);
+        });
+      }
+      return { ok: true, ...data };
+    } catch {
+      return { ok: false, error: "네트워크 오류로 요청을 처리하지 못했습니다." };
+    }
+  },
+
+  async finalizeCurrentItem(liveId: string, sold: boolean, opts?: { advanceToNext?: boolean }) {
+    try {
+      const response = await fetch(`/api/live-sync/lives/${liveId}/finalize`, {
+        method: "POST",
+        headers: jsonAuthHeaders(),
+        body: JSON.stringify({ sold, advance: opts?.advanceToNext === true }),
+      });
+      const data = await response.json();
+      if (!response.ok) return { winnerBid: null, item: null, error: data.error as string };
+      this.applyServerSync({
+        lives: data.live ? [data.live] : [],
+        items: [data.item, data.nextItem].filter(Boolean),
+        bids: data.winnerBid ? [data.winnerBid] : [],
+      });
+      if (data.settlement) {
+        update((state) => {
+          if (!state.settlements.some((settlement) => settlement.id === data.settlement.id)) state.settlements.push(data.settlement);
+        });
+      }
+      return { winnerBid: data.winnerBid as AuctionBid | null, item: data.item as AuctionItem | null };
+    } catch {
+      return { winnerBid: null, item: null, error: "네트워크 오류" };
+    }
   },
 
   // 사용자의 경매 참여 내역 (입찰 기록 + 결과)

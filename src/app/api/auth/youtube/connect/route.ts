@@ -7,6 +7,7 @@ import {
   getOAuthConfig,
   originFromHeaders,
 } from "@/lib/youtubeOAuth";
+import { getRequester } from "@/lib/apiAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,13 +28,11 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const userId =
-    req.nextUrl.searchParams.get("userId")?.trim() ||
-    req.headers.get("x-user-id")?.trim() ||
-    "";
-  if (!userId) {
+  const requester = getRequester(req);
+  if (!requester) {
     return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
   }
+  const userId = requester.userId;
 
   const state = crypto.randomBytes(24).toString("hex");
   const res = NextResponse.redirect(buildAuthUrl(cfg, state));

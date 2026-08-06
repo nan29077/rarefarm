@@ -29,6 +29,7 @@ const statusTone: Record<SettlementStatus, "green" | "amber" | "neutral" | "red"
   payment_done: "green",
   shipping: "amber",
   withdrawable: "green",
+  withdrawal_requested: "amber",
   withdrawn: "neutral",
   cancelled: "red",
 };
@@ -38,6 +39,7 @@ const statusList: SettlementStatus[] = [
   "payment_done",
   "shipping",
   "withdrawable",
+  "withdrawal_requested",
   "withdrawn",
   "cancelled",
 ];

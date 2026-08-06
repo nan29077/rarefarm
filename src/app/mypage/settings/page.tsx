@@ -26,6 +26,7 @@ import { useStoreVersion } from "@/lib/useStore";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useToast } from "@/components/providers/ToastProvider";
 import { cn } from "@/lib/utils";
+import { authService } from "@/lib/auth";
 
 // 알림 설정 항목
 interface NotifState {
@@ -112,23 +113,22 @@ export default function SettingsPage() {
     toast("닉네임이 변경되었습니다.");
   }
 
-  function changePassword() {
+  async function changePassword() {
     if (!user) return;
     if (!pwCur) return toast("현재 비밀번호를 입력해주세요.", "error");
-    if (user.password && pwCur !== user.password)
-      return toast("현재 비밀번호가 일치하지 않습니다.", "error");
-    if (pwNew.length < 4)
-      return toast("새 비밀번호는 4자 이상 입력해주세요.", "error");
+    if (pwNew.length < 8)
+      return toast("새 비밀번호는 8자 이상 입력해주세요.", "error");
     if (pwNew !== pwNew2)
       return toast("새 비밀번호가 서로 일치하지 않습니다.", "error");
-    update((s) => {
-      const u = s.users.find((x) => x.id === user.id);
-      if (u) u.password = pwNew;
-    });
-    setPwCur("");
-    setPwNew("");
-    setPwNew2("");
-    toast("비밀번호가 변경되었습니다.");
+    try {
+      await authService.changePassword(pwCur, pwNew);
+      setPwCur("");
+      setPwNew("");
+      setPwNew2("");
+      toast("비밀번호가 변경되었습니다.");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "비밀번호를 변경할 수 없습니다.", "error");
+    }
   }
 
   function toggleNotif(key: keyof NotifState, label: string) {

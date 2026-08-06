@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverStore } from "@/lib/serverStore";
+import { getRequester, isAdmin } from "@/lib/apiAuth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -8,6 +9,12 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const liveId = req.nextUrl.searchParams.get("liveId") ?? "";
   if (!liveId) return NextResponse.json({ chats: [] });
+  const live = serverStore.getLives()[liveId];
+  const requester = getRequester(req);
+  if (
+    !live ||
+    (live.isPublic === false && live.sellerId !== requester?.userId && !isAdmin(requester))
+  ) return NextResponse.json({ chats: [] }, { status: 404 });
   const chats = serverStore.getChats(liveId);
   return NextResponse.json({ chats });
 }

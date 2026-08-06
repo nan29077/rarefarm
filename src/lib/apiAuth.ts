@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { authStore, SESSION_COOKIE } from "./authStore";
 
 // API 라우트 세션 검증 (서버 전용).
 // 현재 계정 저장소가 localStorage 기반 mock이라 서버에 유저 테이블이 없다.
@@ -8,13 +9,14 @@ import { NextRequest, NextResponse } from "next/server";
 export interface Requester {
   userId: string;
   role: string;
+  nickname: string;
 }
 
 /** 요청 헤더에서 세션 정보 추출 (없으면 null) */
 export function getRequester(req: NextRequest): Requester | null {
-  const userId = req.headers.get("x-user-id")?.trim();
-  if (!userId) return null;
-  return { userId, role: req.headers.get("x-user-role")?.trim() || "user" };
+  const user = authStore.verifySession(req.cookies.get(SESSION_COOKIE)?.value);
+  if (!user) return null;
+  return { userId: user.id, role: user.role, nickname: user.nickname };
 }
 
 export function unauthorized(message = "로그인이 필요합니다.") {

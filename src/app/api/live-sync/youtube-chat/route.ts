@@ -6,6 +6,7 @@ import {
   fetchActiveLiveChatId,
   fetchLiveChatPage,
 } from "@/lib/youtubeChat";
+import { requireUser } from "@/lib/apiAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +17,8 @@ export const dynamic = "force-dynamic";
 //   - 판매자 키가 없으면 서버 공용 env(YOUTUBE_API_KEY) 로 폴백.
 //   - API 키는 응답에 절대 포함되지 않는다.
 export async function GET(req: NextRequest) {
+  const auth = requireUser(req);
+  if (auth.response) return auth.response;
   const q = req.nextUrl.searchParams;
   const liveId = q.get("liveId")?.trim() ?? "";
   const videoId = q.get("videoId")?.trim() ?? "";
@@ -27,6 +30,7 @@ export async function GET(req: NextRequest) {
   }
 
   const live = serverStore.getLives()[liveId];
+  if (!live || live.isPublic === false) return NextResponse.json({ error: "라이브를 찾을 수 없습니다." }, { status: 404 });
   // 판매자 유저 키 → 라이브에 저장된 키 → 서버 공용 env 키 순으로 폴백
   const apiKey =
     (live?.sellerId ? userStore.get(live.sellerId)?.youtubeApiKey : undefined) ||
@@ -43,7 +47,11 @@ export async function GET(req: NextRequest) {
   try {
     let liveChatId = liveChatIdParam;
     if (!liveChatId) {
-      const targetVideoId = videoId || extractVideoId(live?.videoUrl ?? "");
+      const storedVideoId = extractVideoId(live.videoUrl ?? "");
+      if (videoId && storedVideoId && videoId !== storedVideoId) {
+        return NextResponse.json({ error: "라이브 영상 정보가 일치하지 않습니다." }, { status: 400 });
+      }
+      const targetVideoId = storedVideoId;
       if (!targetVideoId) {
         return NextResponse.json(
           { error: "videoId 또는 liveChatId가 필요합니다." },

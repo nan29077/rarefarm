@@ -171,7 +171,7 @@ export default function SellerLiveAuctionPage() {
     setBadgeInput("");
   }
 
-  function create() {
+  async function create() {
     if (!user) return;
     if (!title.trim()) return toast("방송 제목을 입력해주세요.", "error");
     if (!videoUrl.trim())
@@ -184,19 +184,23 @@ export default function SellerLiveAuctionPage() {
     if (!scheduledAt) return toast("방송 예정 시간을 선택해주세요.", "error");
     if (selectedIds.length === 0)
       return toast("경매할 상품을 1개 이상 선택해주세요.", "error");
-    auctionService.createLive({
-      sellerId: user.id,
-      title: title.trim(),
-      videoUrl: videoUrl.trim(),
-      itemIds: selectedIds,
-      scheduledAt: new Date(scheduledAt).toISOString(),
-      thumbnailUrl: thumbnailUrl.trim() || undefined,
-      tags,
-      isPublic,
-      itemDurations,
-      couponIds: selectedCouponIds,
-      badges,
-    });
+    try {
+      await auctionService.createLive({
+        sellerId: user.id,
+        title: title.trim(),
+        videoUrl: videoUrl.trim(),
+        itemIds: selectedIds,
+        scheduledAt: new Date(scheduledAt).toISOString(),
+        thumbnailUrl: thumbnailUrl.trim() || undefined,
+        tags,
+        isPublic,
+        itemDurations,
+        couponIds: selectedCouponIds,
+        badges,
+      });
+    } catch (error) {
+      return toast(error instanceof Error ? error.message : "라이브 경매를 생성할 수 없습니다.", "error");
+    }
     setTitle("");
     setThumbnailUrl("");
     setVideoUrl("");
@@ -1135,15 +1139,15 @@ function LiveCard({ live, sellerItems }: { live: LiveAuction; sellerItems: Aucti
   const platformLabel = live.platform === "youtube" ? "YouTube" : "Instagram";
   const platformBg = live.platform === "youtube" ? "bg-red-600" : "bg-gradient-to-r from-purple-600 to-pink-500";
 
-  function startAuction(item: AuctionItem, sec: number) {
+  async function startAuction(item: AuctionItem, sec: number) {
     // duration을 먼저 설정해야 jumpToItem/setLiveStatus에서 올바른 endTime이 계산됨 (새로고침 후 타이머 유지)
-    auctionService.setItemDuration(live.id, item.id, sec);
-    if (live.status === "scheduled") {
-      auctionService.setLiveStatus(live.id, "live");
-    }
+    if (!await auctionService.setItemDuration(live.id, item.id, sec)) return toast("경매 시간을 저장하지 못했습니다.", "error");
     const idx = live.itemIds.indexOf(item.id);
     if (idx >= 0) {
-      auctionService.jumpToItem(live.id, idx);
+      if (idx !== live.currentItemIndex && !await auctionService.jumpToItem(live.id, idx)) return toast("경매 상품을 선택하지 못했습니다.", "error");
+    }
+    if (live.status === "scheduled") {
+      if (!await auctionService.setLiveStatus(live.id, "live")) return toast("경매를 시작하지 못했습니다.", "error");
     }
     setAuctionStartItem(null);
     toast(`"${item.name}" 경매를 ${AUCTION_TIME_OPTIONS.find(o => o.sec === sec)?.label ?? `${sec / 60}분`}으로 시작합니다.`);
@@ -1341,7 +1345,7 @@ function LiveCard({ live, sellerItems }: { live: LiveAuction; sellerItems: Aucti
               <Bell className="h-4 w-4" strokeWidth={1.75} />
               카카오알림
             </button>
-            <button type="button" onClick={() => { auctionService.setLiveStatus(live.id, "ended"); toast("경매를 종료했습니다."); }} className="inline-flex flex-col items-center gap-0.5 rounded-lg border border-neutral-900 bg-neutral-900 px-2.5 py-2 text-[10px] font-semibold text-white hover:bg-neutral-800">
+            <button type="button" onClick={async () => { const ok = await auctionService.setLiveStatus(live.id, "ended"); toast(ok ? "경매를 종료했습니다." : "경매 종료에 실패했습니다.", ok ? undefined : "error"); }} className="inline-flex flex-col items-center gap-0.5 rounded-lg border border-neutral-900 bg-neutral-900 px-2.5 py-2 text-[10px] font-semibold text-white hover:bg-neutral-800">
               <Square className="h-4 w-4" strokeWidth={1.75} />
               종료
             </button>
@@ -1357,7 +1361,7 @@ function LiveCard({ live, sellerItems }: { live: LiveAuction; sellerItems: Aucti
       {live.status === "scheduled" && (
         <div className="overflow-x-auto">
           <div className="flex min-w-max items-center gap-1 px-3 py-2.5">
-            <button type="button" onClick={() => { auctionService.setLiveStatus(live.id, "live"); toast("경매를 시작했습니다."); }} className="inline-flex flex-col items-center gap-0.5 rounded-lg border border-brand-500 bg-brand-500 px-2.5 py-2 text-[10px] font-semibold text-white hover:bg-brand-600">
+            <button type="button" onClick={async () => { const ok = await auctionService.setLiveStatus(live.id, "live"); toast(ok ? "경매를 시작했습니다." : "경매 시작에 실패했습니다.", ok ? undefined : "error"); }} className="inline-flex flex-col items-center gap-0.5 rounded-lg border border-brand-500 bg-brand-500 px-2.5 py-2 text-[10px] font-semibold text-white hover:bg-brand-600">
               <Play className="h-4 w-4" strokeWidth={1.75} />
               경매 시작
             </button>

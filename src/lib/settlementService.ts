@@ -9,6 +9,7 @@ export const settlementStatusLabels: Record<SettlementStatus, string> = {
   payment_done: "결제 완료",
   shipping: "배송/전달 중",
   withdrawable: "출금 가능",
+  withdrawal_requested: "출금 처리 중",
   withdrawn: "출금 완료",
   cancelled: "낙찰 취소",
 };
@@ -162,10 +163,9 @@ export const settlementService = {
           s.settlements
             .filter((sv) => sv.sellerId === sellerId && sv.status === "withdrawable")
             .forEach((sv) => {
-              sv.status = "withdrawn";
+              sv.status = "withdrawal_requested";
               sv.withdrawRequestedAt = now;
-              sv.withdrawnAt = now;
-              sv.withdrawAccount = account;
+              sv.withdrawAccount = { ...account, accountNumber: `****${account.accountNumber.replace(/\D/g, "").slice(-4)}` };
             });
         });
       }

@@ -55,9 +55,14 @@ export async function POST(req: NextRequest) {
   }
 
   const live = serverStore.getLives()[liveId];
+  if (!live) return NextResponse.json({ error: "라이브를 찾을 수 없습니다." }, { status: 404 });
   // 방송 주인(판매자) 또는 관리자만 동기화를 트리거할 수 있다
-  if (live && live.sellerId !== auth.requester.userId && !isAdmin(auth.requester)) {
+  if (live.sellerId !== auth.requester.userId && !isAdmin(auth.requester)) {
     return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
+  }
+  const storedVideoId = live.videoUrl.match(/(?:v=|youtu\.be\/|\/live\/|\/embed\/|\/shorts\/)([\w-]{11})/)?.[1];
+  if (!storedVideoId || storedVideoId !== videoId || live.status !== "live") {
+    return NextResponse.json({ error: "현재 라이브 영상 정보가 일치하지 않습니다." }, { status: 409 });
   }
 
   // 기존 서버 폴링(yt-chat)이 같은 라이브를 이미 처리 중이면 중복 호출을 피한다.

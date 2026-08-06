@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverStore } from "@/lib/serverStore";
 import { isAdmin, requireUser } from "@/lib/apiAuth";
+import { userStore } from "@/lib/userStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,28 +22,29 @@ export async function POST(req: NextRequest) {
   const auth = requireUser(req);
   if (auth.response) return auth.response;
 
-  const { liveId, videoId, apiKey: reqApiKey } = await req.json();
+  const { liveId, videoId } = await req.json();
 
   if (!liveId || !videoId) {
     return NextResponse.json({ error: "missing params" }, { status: 400 });
   }
 
   const currentLive = serverStore.getLives()[liveId];
-  if (currentLive && currentLive.sellerId !== auth.requester.userId && !isAdmin(auth.requester)) {
+  if (!currentLive) return NextResponse.json({ error: "live not found" }, { status: 404 });
+  if (currentLive.sellerId !== auth.requester.userId && !isAdmin(auth.requester)) {
     return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
+  }
+  const storedVideoId = currentLive.videoUrl.match(/(?:v=|youtu\.be\/|\/live\/|\/embed\/|\/shorts\/)([\w-]{11})/)?.[1];
+  if (!storedVideoId || storedVideoId !== videoId || currentLive.status !== "live") {
+    return NextResponse.json({ error: "current live video mismatch" }, { status: 409 });
   }
 
   // 판매자가 보낸 apiKey는 serverStore의 live에만 저장하고 응답으로는 절대 내보내지 않는다.
   // 키가 변경된 경우에도 최신 키로 갱신 (구버전 키가 서버에 남아 폴링 실패하는 문제 방지)
-  if (reqApiKey && currentLive && currentLive.youtubeApiKey !== reqApiKey) {
-    serverStore.setLive({ ...currentLive, youtubeApiKey: reqApiKey });
-  }
 
   // 실제 사용할 키: 서버 환경변수 우선 → 서버에 저장된 판매자 키 → 이번 요청 키
   const apiKey =
     process.env.YOUTUBE_API_KEY ||
-    reqApiKey ||
-    serverStore.getLives()[liveId]?.youtubeApiKey;
+    (currentLive?.sellerId ? userStore.resolveApiKey(currentLive.sellerId) : undefined);
   if (!apiKey) {
     return NextResponse.json({ error: "YouTube API 키가 설정되지 않았습니다." }, { status: 400 });
   }
@@ -97,7 +99,6 @@ export async function POST(req: NextRequest) {
   let consecutiveErrors = 0;
 
   // YouTube 메시지 텍스트 파싱 (일반 텍스트 + 커스텀 이모지 모두 포함)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function buildMessageText(item: any): string {
     const displayMsg: string = item.snippet?.displayMessage ?? "";
     const runs =
@@ -107,7 +108,6 @@ export async function POST(req: NextRequest) {
         : null);
     if (!runs || !Array.isArray(runs)) return displayMsg;
     return runs
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((run: any) => {
         if (run.text) return run.text as string;
         if (run.emoji) {
@@ -150,9 +150,7 @@ export async function POST(req: NextRequest) {
 
       if (data.nextPageToken) nextPageToken = data.nextPageToken;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const newMsgs: Array<{ id: string; name: string; text: string; source: string; mine: boolean }> = [];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const item of (data.items ?? []) as any[]) {
         const ytMsgId = item.id as string;
         if (!ytMsgId || seenYtIds.has(ytMsgId)) continue;

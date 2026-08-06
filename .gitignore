@@ -3,6 +3,7 @@ node_modules
 out
 .DS_Store
 *.tsbuildinfo
+*.log
 next-env.d.ts
 .live-data
 

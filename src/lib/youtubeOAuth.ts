@@ -123,6 +123,8 @@ export function expiryFromNow(expiresInSec: number): string {
 
 /** 요청에서 origin 추출 (프록시 환경 고려) */
 export function originFromHeaders(headers: Headers): string {
+  const configured = process.env.SITE_URL || process.env.NEXTAUTH_URL;
+  if (configured) return new URL(configured).origin;
   const host = headers.get("host") ?? "localhost:3014";
   const proto =
     headers.get("x-forwarded-proto") ??

@@ -54,7 +54,7 @@ const STORAGE_KEY = "rarefarm:v1";
 
 function initialState(): AppState {
   return {
-    users: structuredClone(seed.users),
+    users: structuredClone(seed.users).map(({ password: _password, ...user }) => user),
     products: structuredClone(seed.products),
     bids: structuredClone(seed.bids),
     asks: structuredClone(seed.asks),
@@ -110,10 +110,11 @@ function load(): AppState {
       const loaded = JSON.parse(raw);
       if (loaded.users) {
         loaded.users = loaded.users.map((u: User) => {
+          const { password: _password, ...safeUser } = u;
           if (!u.avatar || !u.avatar.startsWith("/")) {
-            return { ...u, avatar: getCharacterAvatar(u.id) };
+            return { ...safeUser, avatar: getCharacterAvatar(u.id) };
           }
-          return u;
+          return safeUser;
         });
       }
       state = { ...initialState(), ...loaded };
@@ -130,7 +131,11 @@ function load(): AppState {
 function persist() {
   if (typeof window === "undefined" || !state) return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const safeState = {
+      ...state,
+      users: state.users.map(({ password: _password, ...user }) => user),
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(safeState));
   } catch {
     /* noop */
   }

@@ -4,13 +4,8 @@
 // 계정 저장소가 localStorage 기반 mock이라 쿠키 세션이 없어 헤더로 전달한다.
 // 서버 검증은 lib/apiAuth.ts 참고.
 
-import { authService } from "./auth";
-
-/** 현재 로그인 사용자 기준 인증 헤더 (미로그인 시 빈 객체) */
 export function authHeaders(): Record<string, string> {
-  const user = authService.getCurrentUser();
-  if (!user) return {};
-  return { "X-User-Id": user.id, "X-User-Role": user.role };
+  return {};
 }
 
 /** JSON 요청용 헤더 (Content-Type + 세션) */
@@ -22,6 +17,7 @@ export function jsonAuthHeaders(): Record<string, string> {
 export function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
   return fetch(input, {
     ...init,
+    credentials: "same-origin",
     headers: { ...authHeaders(), ...(init.headers as Record<string, string> | undefined) },
   });
 }

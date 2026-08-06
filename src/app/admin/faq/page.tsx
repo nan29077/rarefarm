@@ -295,7 +295,7 @@ export default function AdminFaqPage() {
       <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="FAQ 삭제">
         <div className="pb-2">
           <p className="text-sm text-neutral-600">
-            <span className="font-bold text-neutral-900">"{deleteTarget?.question}"</span>을 삭제할까요?
+            <span className="font-bold text-neutral-900">&ldquo;{deleteTarget?.question}&rdquo;</span>을 삭제할까요?
           </p>
           <div className="mt-4 grid grid-cols-2 gap-2">
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>취소</Button>

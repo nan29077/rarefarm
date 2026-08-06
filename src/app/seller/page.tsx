@@ -42,6 +42,7 @@ const settlementTone: Record<string, "green" | "red" | "amber" | "neutral"> = {
   payment_done: "neutral",
   shipping: "neutral",
   withdrawable: "green",
+  withdrawal_requested: "amber",
   withdrawn: "neutral",
   cancelled: "red",
 };

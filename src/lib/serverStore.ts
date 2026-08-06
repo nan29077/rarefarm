@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import type { AuctionItem, AuctionBid, LiveAuction, Settlement } from "@/types";
 
 const DATA_DIR = path.join(process.cwd(), ".live-data");
@@ -34,32 +35,70 @@ export function toPublicLives(lives: LiveAuction[]): LiveAuction[] {
   return lives.map(toPublicLive);
 }
 
+function maskBidderName(name: string): string {
+  const chars = Array.from(name.trim());
+  if (chars.length <= 1) return "익명";
+  if (chars.length === 2) return `${chars[0]}*`;
+  return `${chars[0]}${"*".repeat(Math.min(3, chars.length - 2))}${chars[chars.length - 1]}`;
+}
+
+export function toPublicBid(bid: AuctionBid): AuctionBid {
+  return { ...bid, userId: null, bidderName: maskBidderName(bid.bidderName) };
+}
+
+export function toPublicBids(bids: AuctionBid[]): AuctionBid[] {
+  return bids.map(toPublicBid);
+}
+
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 function readJSON<T>(file: string, defaultVal: T): T {
   try {
     if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, "utf-8")) as T;
-  } catch {
-    /* noop */
+  } catch (error) {
+    console.error(`[ServerStore] failed to read ${path.basename(file)}`, error);
   }
   return defaultVal;
 }
 
 function writeJSON(file: string, data: unknown) {
+  const temp = `${file}.${process.pid}.${crypto.randomBytes(5).toString("hex")}.tmp`;
   try {
-    fs.writeFileSync(file, JSON.stringify(data), "utf-8");
-  } catch {
-    /* noop */
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(temp, JSON.stringify(data), { encoding: "utf8", mode: 0o600 });
+    fs.renameSync(temp, file);
+  } catch (error) {
+    try { if (fs.existsSync(temp)) fs.unlinkSync(temp); } catch { /* cleanup only */ }
+    console.error(`[ServerStore] failed to write ${path.basename(file)}`, error);
+    throw error;
   }
 }
 
 declare global {
   // eslint-disable-next-line no-var
-  var __sse_clients_rarefarm: Set<(data: string) => void>;
+  var __sse_clients_rarefarm: Set<{
+    send: (data: string) => void;
+    userId?: string;
+    isAdmin: boolean;
+  }>;
+  // eslint-disable-next-line no-var
+  var __rf_store_queue: Promise<void>;
 }
 if (!global.__sse_clients_rarefarm) global.__sse_clients_rarefarm = new Set();
+if (!global.__rf_store_queue) global.__rf_store_queue = Promise.resolve();
 
 export const serverStore = {
+  async runExclusive<T>(operation: () => T | Promise<T>): Promise<T> {
+    const previous = global.__rf_store_queue;
+    let release!: () => void;
+    global.__rf_store_queue = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  },
   getLives(): Record<string, LiveAuction> {
     return readJSON<Record<string, LiveAuction>>(LIVES_FILE, {});
   },
@@ -87,6 +126,7 @@ export const serverStore = {
   },
   addBid(bid: AuctionBid) {
     const bids = this.getBids();
+    if (bids.some((existing) => existing.id === bid.id)) return;
     bids.push(bid);
     writeJSON(BIDS_FILE, bids);
   },
@@ -117,6 +157,7 @@ export const serverStore = {
   },
   addSettlement(settlement: Settlement) {
     const list = this.getSettlements();
+    if (list.some((existing) => existing.id === settlement.id || existing.itemId === settlement.itemId)) return;
     list.push(settlement);
     writeJSON(SETTLEMENTS_FILE, list);
   },
@@ -163,16 +204,52 @@ export const serverStore = {
   // ================= SSE =================
   broadcast(event: string, data: unknown) {
     const msg = `data: ${JSON.stringify({ event, data })}\n\n`;
-    global.__sse_clients_rarefarm.forEach((send) => {
-      try { send(msg); } catch { /* noop */ }
+    const record = data && typeof data === "object" ? data as Record<string, unknown> : {};
+    const nestedLive = record.live && typeof record.live === "object"
+      ? record.live as Record<string, unknown>
+      : undefined;
+    const nestedItem = record.item && typeof record.item === "object"
+      ? record.item as Record<string, unknown>
+      : undefined;
+    const nestedBid = record.bid && typeof record.bid === "object"
+      ? record.bid as Record<string, unknown>
+      : undefined;
+    const liveId = String(
+      record.liveId ?? nestedLive?.id ?? nestedItem?.liveId ?? nestedBid?.liveId ?? ""
+    );
+    const live = liveId ? this.getLives()[liveId] : undefined;
+    const settlementId = event.startsWith("settlement_") && typeof record.id === "string"
+      ? record.id
+      : "";
+    const settlement = settlementId
+      ? this.getSettlements().find((candidate) => candidate.id === settlementId)
+      : undefined;
+
+    global.__sse_clients_rarefarm.forEach((client) => {
+      if (
+        live?.isPublic === false &&
+        !client.isAdmin &&
+        client.userId !== live.sellerId
+      ) return;
+      if (
+        settlement &&
+        !client.isAdmin &&
+        client.userId !== settlement.sellerId &&
+        client.userId !== settlement.buyerId
+      ) return;
+      if (
+        event === "settlement_withdrawal_requested" &&
+        typeof record.sellerId === "string" &&
+        !client.isAdmin &&
+        client.userId !== record.sellerId
+      ) return;
+      try { client.send(msg); } catch { /* noop */ }
     });
   },
-  addSSEClient(send: (data: string) => void) {
-    global.__sse_clients_rarefarm.add(send);
+  addSSEClient(send: (data: string) => void, viewer?: { userId?: string; isAdmin?: boolean }) {
+    const client = { send, userId: viewer?.userId, isAdmin: viewer?.isAdmin === true };
+    global.__sse_clients_rarefarm.add(client);
     // 반환된 함수로 연결 종료 시 클라이언트 제거
-    return () => { global.__sse_clients_rarefarm.delete(send); };
-  },
-  removeSSEClient(send: (data: string) => void) {
-    global.__sse_clients_rarefarm.delete(send);
+    return () => { global.__sse_clients_rarefarm.delete(client); };
   },
 };

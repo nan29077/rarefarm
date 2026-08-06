@@ -187,7 +187,8 @@ export interface AuctionItem {
   shipLeadTime?: string; // 발송 예정일
   hasCertificate?: boolean; // 정품 인증서 여부
   isUnopened?: boolean; // 미개봉 여부
-  endTime?: number; // 경매 종료 절대 시각 (timestamp ms, 서버 기준 — 크로스브라우저 타이머 동기화용)
+  endTime?: number; // 경매 종료 절대 시각
+  pausedRemainingMs?: number; // 일시정지 시 남은 시간
 }
 
 export type LiveAuctionStatus = "scheduled" | "live" | "paused" | "ended"; // 예정 / 진행중 / 일시정지 / 종료
@@ -345,6 +346,7 @@ export type SettlementStatus =
   | "payment_done"     // 결제 완료 → 정산 예정 금액
   | "shipping"         // 배송 중
   | "withdrawable"     // 출금 가능 (구매 확정 완료)
+  | "withdrawal_requested" // 출금 신청 완료, 관리자/지급 시스템 처리 대기
   | "withdrawn"        // 출금 완료
   | "cancelled";       // 24시간 미결제로 낙찰 무효
 
@@ -379,4 +381,6 @@ export interface Settlement {
   withdrawRequestedAt?: number;
   withdrawnAt?: number;
   withdrawAccount?: WithdrawAccount;
+  withdrawAccountEncrypted?: string; // 서버 저장 전용 암호문
+  payoutReference?: string;
 }
