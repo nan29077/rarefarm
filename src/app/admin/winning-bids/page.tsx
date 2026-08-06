@@ -27,7 +27,13 @@ export default function AdminWinningBidsPage() {
   const paidCount = soldItems.filter((i) => i.finalPrice && i.finalPrice > 0).length;
   const totalAmount = soldItems.reduce((sum, i) => sum + (i.finalPrice ?? 0), 0);
 
+  // 데모 데이터 기준 결제 상태 판정: finalPrice가 있으면 결제 완료, 없으면 미결제.
+  // (취소 상태는 아직 데이터 모델에 없어 해당 필터 선택 시 빈 목록이 된다)
+  const itemPayStatus = (finalPrice: number | null): "paid" | "unpaid" | "cancelled" =>
+    finalPrice && finalPrice > 0 ? "paid" : "unpaid";
+
   const filtered = soldItems.filter((it) => {
+    if (statusFilter !== "all" && itemPayStatus(it.finalPrice) !== statusFilter) return false;
     if (query.trim()) return it.name.toLowerCase().includes(query.trim().toLowerCase());
     return true;
   });

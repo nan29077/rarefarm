@@ -47,13 +47,17 @@ function hashPassword(password: string, salt = crypto.randomBytes(16).toString("
 }
 
 function readAccounts(): StoredAccount[] {
-  try {
-    if (fs.existsSync(ACCOUNTS_FILE)) {
+  // 파일이 존재하는데 읽기/파싱에 실패한 경우, 시드로 덮어쓰면 기존 계정이 전부 소실된다.
+  // → 원본 파일은 그대로 보존하고(쓰기 금지) 빈 배열만 반환한다.
+  if (fs.existsSync(ACCOUNTS_FILE)) {
+    try {
       const parsed = JSON.parse(fs.readFileSync(ACCOUNTS_FILE, "utf8"));
       if (Array.isArray(parsed)) return parsed as StoredAccount[];
+      console.error("[auth] account store malformed — preserving original file, returning empty list");
+    } catch (error) {
+      console.error("[auth] account store read failed — preserving original file, returning empty list", error);
     }
-  } catch (error) {
-    console.error("[auth] account store read failed", error);
+    return [];
   }
 
   const allowDemoAccounts =

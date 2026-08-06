@@ -409,6 +409,8 @@ export default function MyPage() {
           {tradeTab === "purchases" && (
             myPurchases.length ? (
               <div className="space-y-2">
+                {/* 구매 내역은 아직 mockData 기반 — 데모 데이터임을 명시 */}
+                <p className="text-[11px] text-neutral-400">아래 구매 내역은 데모 데이터입니다.</p>
                 {myPurchases.map((p) => (
                   <div
                     key={p.id}
@@ -786,6 +788,8 @@ export default function MyPage() {
             </div>
             {myPoints.length ? (
               <div className="space-y-2">
+                {/* 포인트 내역은 아직 mockData 기반 — 데모 데이터임을 명시 */}
+                <p className="text-[11px] text-neutral-400">아래 포인트 내역은 데모 데이터입니다.</p>
                 {myPoints.map((p) => (
                   <div
                     key={p.id}
@@ -817,6 +821,10 @@ export default function MyPage() {
           {allCoupons.length > 0 && (
             <div>
               <p className="mb-2 text-xs font-bold text-neutral-500">쿠폰함 ({allCoupons.length})</p>
+              {/* mockData 기반 쿠폰이 섞여 있으면 데모 데이터임을 명시 */}
+              {coupons.some((c) => c.userId === user.id) && (
+                <p className="mb-2 text-[11px] text-neutral-400">일부 쿠폰은 데모 데이터입니다.</p>
+              )}
               <div className="space-y-2">
                 {allCoupons.map((c) => (
                   <div

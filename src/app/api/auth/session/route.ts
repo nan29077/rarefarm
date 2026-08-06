@@ -32,9 +32,11 @@ function rateLimited(req: NextRequest): boolean {
 }
 
 export async function GET(req: NextRequest) {
-  const requester = getRequester(req);
-  if (!requester) return NextResponse.json({ user: null }, { status: 401 });
-  return NextResponse.json({ user: requester });
+  // 세션 복원용 — restoreSession()이 완전한 User로 캐시하므로
+  // id/email/avatar 등을 모두 포함한 전체 User 객체를 반환해야 한다.
+  const user = authStore.verifySession(req.cookies.get(SESSION_COOKIE)?.value);
+  if (!user) return NextResponse.json({ user: null }, { status: 401 });
+  return NextResponse.json({ user });
 }
 
 export async function POST(req: NextRequest) {

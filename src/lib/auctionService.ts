@@ -15,9 +15,6 @@ import { categories } from "./mockData";
 import { getState, update, uid } from "./store";
 import { authHeaders, jsonAuthHeaders } from "./apiClient";
 
-// auctionService 내부용 경매 기본 시간 (초) — itemDurations/durationSec 없을 때 폴백
-const DEFAULT_AUCTION_SEC = 90;
-
 /**
  * 실제 낙찰자 판정용 최고 입찰 선택.
  * - 봇(시뮬레이션) 입찰은 userId가 null이므로 제외 — 표시용일 뿐 낙찰 대상이 아니다.
@@ -463,88 +460,6 @@ export const auctionService = {
   },
 
   // 라이브 시작/일시정지/재개/종료
-  setLiveStatusLegacy(liveId: string, status: LiveAuctionStatus) {
-    update((s) => {
-      const l = s.liveAuctions.find((x) => x.id === liveId);
-      if (!l) return;
-      l.status = status;
-      if (status === "live") {
-        if (l.viewers === 0) l.viewers = 30 + Math.floor(Math.random() * 200);
-        const cur = s.auctionItems.find(
-          (i) => i.id === l.itemIds[l.currentItemIndex]
-        );
-        if (cur && cur.status === "waiting") {
-          cur.status = "live";
-          // 경매 종료 시각 설정 (서버 기준 — 크로스브라우저 타이머 동기화)
-          const dur = l.itemDurations?.[cur.id] ?? cur.durationSec ?? DEFAULT_AUCTION_SEC;
-          cur.endTime = Date.now() + dur * 1000;
-        }
-      }
-      if (status === "ended") {
-        // 진행되지 못한 상품은 유찰 처리
-        l.itemIds.forEach((id) => {
-          const it = s.auctionItems.find((i) => i.id === id);
-          if (it && (it.status === "waiting" || it.status === "live"))
-            it.status = "failed";
-        });
-        l.viewers = 0;
-      }
-    });
-
-    // 서버 동기화 (fire-and-forget)
-    if (status === "ended") {
-      fetch(`/api/live-sync/lives/${liveId}`, {
-        method: "DELETE",
-        headers: authHeaders(),
-      }).catch(() => {});
-      // YouTube 폴링 중지
-      fetch(`/api/live-sync/yt-chat`, {
-        method: "DELETE",
-        headers: jsonAuthHeaders(),
-        body: JSON.stringify({ liveId }),
-      }).catch(() => {});
-    } else {
-      const s = getState();
-      const updatedLive = s.liveAuctions.find((l) => l.id === liveId);
-      if (updatedLive) {
-        const relatedItems = s.auctionItems.filter((i) =>
-          updatedLive.itemIds.includes(i.id)
-        );
-        // 전체 live 데이터 포함 → 서버 재시작 후에도 upsert 가능
-        fetch(`/api/live-sync/lives/${liveId}`, {
-          method: "PATCH",
-          headers: jsonAuthHeaders(),
-          body: JSON.stringify({
-            ...updatedLive,
-            items: relatedItems,
-          }),
-        }).catch(() => {});
-
-        // YouTube 채팅 서버 폴링 시작 (라이브 시작 시)
-        if (status === "live" && updatedLive.videoUrl) {
-          const videoId = extractYouTubeId(updatedLive.videoUrl);
-          const apiKey = s.sellerYoutubeApiKeys?.[updatedLive.sellerId] ?? "";
-          console.log("[YT-CHAT] setLiveStatus 폴링 시작:", {
-            liveId,
-            videoId: videoId ?? "없음 (YouTube URL 아님)",
-            apiKey: apiKey ? "있음" : "없음 (설정 탭에서 저장 필요)",
-          });
-          if (videoId && apiKey) {
-            fetch(`/api/live-sync/yt-chat`, {
-              method: "POST",
-              headers: jsonAuthHeaders(),
-              body: JSON.stringify({ liveId, videoId, apiKey }),
-            })
-              .then((r) => r.json())
-              .then((d) => console.log("[YT-CHAT] 서버 폴링 응답:", d))
-              .catch((err) => console.error("[YT-CHAT] 폴링 시작 오류:", err));
-          }
-        }
-      }
-    }
-  },
-
-  // 상품 순서 이동 (위/아래)
   async setLiveStatus(liveId: string, status: LiveAuctionStatus): Promise<boolean> {
     try {
       const response = await fetch(`/api/live-sync/lives/${liveId}/status`, {
@@ -568,6 +483,7 @@ export const auctionService = {
     }
   },
 
+  // 상품 순서 이동 (위/아래)
   async moveLiveItem(liveId: string, index: number, dir: -1 | 1): Promise<boolean> {
     let nextOrder: string[] | null = null;
     update((s) => {
@@ -593,15 +509,38 @@ export const auctionService = {
   },
 
   // 지난 라이브 삭제 (클라이언트 store + 서버 파일 동기화)
-  deleteLive(liveId: string) {
+  // 서버 삭제 실패 시 로컬 삭제를 롤백해 SSE 재접속 시 부활/불일치를 막는다.
+  async deleteLive(liveId: string): Promise<{ ok: boolean; error?: string }> {
+    const before = getState().liveAuctions;
+    const removedIndex = before.findIndex((l) => l.id === liveId);
+    const removed = removedIndex >= 0 ? before[removedIndex] : undefined;
     update((s) => {
       s.liveAuctions = s.liveAuctions.filter((l) => l.id !== liveId);
     });
-    // 서버 동기화 (fire-and-forget)
-    fetch(`/api/live-sync/lives/${liveId}`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    }).catch(() => {});
+    const rollback = () => {
+      if (!removed) return;
+      update((s) => {
+        if (!s.liveAuctions.some((l) => l.id === liveId)) {
+          const at = Math.min(Math.max(removedIndex, 0), s.liveAuctions.length);
+          s.liveAuctions.splice(at, 0, removed);
+        }
+      });
+    };
+    try {
+      const response = await fetch(`/api/live-sync/lives/${liveId}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        rollback();
+        return { ok: false, error: data.error ?? "라이브를 삭제할 수 없습니다." };
+      }
+      return { ok: true };
+    } catch {
+      rollback();
+      return { ok: false, error: "네트워크 오류로 라이브를 삭제하지 못했습니다." };
+    }
   },
 
 
@@ -610,208 +549,6 @@ export const auctionService = {
   // 특정 상품의 입찰 기록 조회
   getBidsForItem(itemId: string): AuctionBid[] {
     return getState().auctionBids.filter((b) => b.itemId === itemId);
-  },
-
-  placeBidLegacy(liveId: string, itemId: string, user: { id: string; nickname: string }, price: number) {
-    update((s) => {
-      const item = s.auctionItems.find((x) => x.id === itemId);
-      if (!item) return;
-      if (price > item.currentPrice) item.currentPrice = price;
-      const bid: import("@/types").AuctionBid = {
-        id: uid("bid"),
-        liveId,
-        itemId,
-        userId: user.id,
-        bidderName: user.nickname,
-        price,
-        createdAt: new Date().toISOString(),
-      };
-      s.auctionBids.push(bid);
-    });
-    const s = getState();
-    const bid = [...s.auctionBids].reverse().find((b) => b.itemId === itemId && b.userId === user.id);
-    if (bid) {
-      fetch("/api/live-sync/bids", {
-        method: "POST",
-        headers: jsonAuthHeaders(),
-        body: JSON.stringify(bid),
-      }).catch(() => {});
-    }
-  },
-
-  buyNowLegacy(liveId: string, itemId: string, user: { id: string; nickname: string }) {
-    update((s) => {
-      const item = s.auctionItems.find((x) => x.id === itemId);
-      if (!item || item.buyNowPrice === null) return;
-      item.status = "sold";
-      item.winnerName = user.nickname;
-      item.finalPrice = item.buyNowPrice;
-      item.currentPrice = item.buyNowPrice;
-      const bid: import("@/types").AuctionBid = {
-        id: uid("bid"),
-        liveId,
-        itemId,
-        userId: user.id,
-        bidderName: user.nickname,
-        price: item.buyNowPrice,
-        createdAt: new Date().toISOString(),
-      };
-      s.auctionBids.push(bid);
-      const now = Date.now();
-      const settlement: import("@/types").Settlement = {
-        id: `s-${now}-${Math.random().toString(36).slice(2, 8)}`,
-        orderId: bid.id,
-        itemId: item.id,
-        itemName: item.name,
-        sellerId: item.sellerId,
-        buyerId: user.id,
-        salePrice: item.buyNowPrice,
-        platformFee: Math.round(item.buyNowPrice * 0.11),
-        settlementAmount: Math.round(item.buyNowPrice * 0.89),
-        status: "pending_payment",
-        awardedAt: now,
-        paymentDeadline: now + 24 * 60 * 60 * 1000,
-      };
-      s.settlements.push(settlement);
-      const l = s.liveAuctions.find((x) => x.id === liveId);
-      if (l) {
-        const nextIndex = l.currentItemIndex + 1;
-        if (nextIndex < l.itemIds.length) {
-          l.currentItemIndex = nextIndex;
-          const nextItem = s.auctionItems.find((i) => i.id === l.itemIds[nextIndex]);
-          if (nextItem && nextItem.status === "waiting" && !nextItem.suspended) {
-            nextItem.status = "live";
-            // 다음 상품 경매 종료 시각 설정 (즉시 낙찰 후 다음 상품)
-            const dur = l.itemDurations?.[nextItem.id] ?? nextItem.durationSec ?? DEFAULT_AUCTION_SEC;
-            nextItem.endTime = Date.now() + dur * 1000;
-          }
-        }
-      }
-    });
-    const s = getState();
-    const bid = [...s.auctionBids].reverse().find((b) => b.itemId === itemId && b.userId === user.id);
-    if (bid) {
-      fetch("/api/live-sync/bids", {
-        method: "POST",
-        headers: jsonAuthHeaders(),
-        body: JSON.stringify(bid),
-      }).catch(() => {});
-    }
-    const settlement = [...s.settlements].reverse().find((sv) => sv.itemId === itemId);
-    if (settlement) {
-      fetch("/api/settlement/create", {
-        method: "POST",
-        headers: jsonAuthHeaders(),
-        body: JSON.stringify(settlement),
-      }).catch(() => {});
-    }
-    // 즉시 낙찰(buyNow) 시 상품 sold 처리는 서버(/api/live-sync/bids)가 수행한다.
-    // 호스트가 같은 상품을 다시 낙찰 확정해 정산이 중복 생성되는 것을 막기 위함.
-  },
-
-  /**
-   * 현재 상품 낙찰/유찰 확정.
-   *
-   * ⚠️ 호스트(판매자) 브라우저에서만 호출해야 한다.
-   *    시청자 브라우저에서 각각 실행되면 정산이 중복 생성된다.
-   *
-   * 낙찰자는 실제 사용자 입찰(userId 있는 입찰)만으로 판정하며,
-   * 봇(시뮬레이션) 입찰은 분위기 연출용이라 낙찰 대상에서 제외된다.
-   * 실제 입찰이 하나도 없으면 낙찰자 없음(유찰)으로 처리한다.
-   *
-   * @param opts.advanceToNext true면 다음 상품으로 인덱스 자동 이동
-   *   (기본 false — 판매자가 "다음 상품" 버튼으로 수동 이동)
-   */
-  finalizeCurrentItemLegacy(
-    liveId: string,
-    sold: boolean,
-    opts?: { advanceToNext?: boolean }
-  ): { winnerBid: AuctionBid | null; item: AuctionItem | null } {
-    const s0 = getState();
-    const live0 = s0.liveAuctions.find((x) => x.id === liveId);
-    if (!live0) return { winnerBid: null, item: null };
-    const item0 = s0.auctionItems.find((i) => i.id === live0.itemIds[live0.currentItemIndex]);
-    if (!item0) return { winnerBid: null, item: null };
-
-    // 실제 사용자 입찰만으로 낙찰자 판정 (봇 제외 · 동가는 먼저 입찰한 사람 우선)
-    const winnerBid = sold ? pickWinningBid(s0.auctionBids, item0.id) : null;
-
-    const now = Date.now();
-    const settlement: import("@/types").Settlement | null = winnerBid?.userId
-      ? {
-          id: `s-${now}-${Math.random().toString(36).slice(2, 8)}`,
-          orderId: winnerBid.id,
-          itemId: item0.id,
-          itemName: item0.name,
-          sellerId: item0.sellerId,
-          buyerId: winnerBid.userId,
-          salePrice: winnerBid.price,
-          platformFee: Math.round(winnerBid.price * 0.11),
-          settlementAmount: Math.round(winnerBid.price * 0.89),
-          status: "pending_payment",
-          awardedAt: now,
-          paymentDeadline: now + 24 * 60 * 60 * 1000,
-        }
-      : null;
-
-    update((s) => {
-      const l = s.liveAuctions.find((x) => x.id === liveId);
-      if (!l) return;
-      const item = s.auctionItems.find((i) => i.id === l.itemIds[l.currentItemIndex]);
-      if (!item) return;
-      if (winnerBid) {
-        item.status = "sold";
-        item.winnerName = winnerBid.bidderName;
-        item.finalPrice = winnerBid.price;
-        item.currentPrice = winnerBid.price;
-      } else {
-        item.status = "failed";
-      }
-      if (settlement) s.settlements.push(settlement);
-
-      if (opts?.advanceToNext) {
-        const nextIndex = l.currentItemIndex + 1;
-        if (nextIndex < l.itemIds.length) {
-          l.currentItemIndex = nextIndex;
-          const nextItem = s.auctionItems.find((i) => i.id === l.itemIds[nextIndex]);
-          if (nextItem && nextItem.status === "waiting" && !nextItem.suspended) {
-            nextItem.status = "live";
-            // 다음 상품 경매 종료 시각 설정 (크로스브라우저 타이머 동기화)
-            const dur = l.itemDurations?.[nextItem.id] ?? nextItem.durationSec ?? DEFAULT_AUCTION_SEC;
-            nextItem.endTime = Date.now() + dur * 1000;
-          }
-        }
-      }
-    });
-
-    // 서버 동기화: 확정된 상품 상태 broadcast (advanceToNext면 인덱스 + 전체 상품)
-    const s2 = getState();
-    const updatedLive = s2.liveAuctions.find((x) => x.id === liveId);
-    const finalizedItem = s2.auctionItems.find((i) => i.id === item0.id) ?? null;
-    if (updatedLive) {
-      const body = opts?.advanceToNext
-        ? {
-            currentItemIndex: updatedLive.currentItemIndex,
-            items: s2.auctionItems.filter((i) => updatedLive.itemIds.includes(i.id)),
-          }
-        : { items: finalizedItem ? [finalizedItem] : [] };
-      fetch(`/api/live-sync/lives/${liveId}`, {
-        method: "PATCH",
-        headers: jsonAuthHeaders(),
-        body: JSON.stringify(body),
-      }).catch(() => {});
-    }
-
-    // 정산 서버 저장 (서버가 단일 기준 — 관리자/판매자 화면이 공유해서 조회)
-    if (settlement) {
-      fetch("/api/settlement/create", {
-        method: "POST",
-        headers: jsonAuthHeaders(),
-        body: JSON.stringify(settlement),
-      }).catch(() => {});
-    }
-
-    return { winnerBid, item: finalizedItem };
   },
 
   async placeBid(liveId: string, itemId: string, _user: { id: string; nickname: string }, price: number) {

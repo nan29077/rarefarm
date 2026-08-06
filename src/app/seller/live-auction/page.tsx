@@ -57,7 +57,7 @@ import { couponService, couponDiscountLabel } from "@/lib/couponService";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useToast } from "@/components/providers/ToastProvider";
 import { useStoreVersion } from "@/lib/useStore";
-import { formatPrice, formatNumber, cn } from "@/lib/utils";
+import { formatPrice, formatNumber, cn, fileToDataUrl } from "@/lib/utils";
 import type { AuctionItem, LiveAuction, LiveAuctionStatus, LivePlatform, LiveCoupon } from "@/types";
 
 const liveTone: Record<LiveAuctionStatus, "green" | "red" | "amber" | "neutral"> = {
@@ -109,12 +109,17 @@ export default function SellerLiveAuctionPage() {
   // 썸네일 파일 첨부용 input ref
   const thumbFileRef = useRef<HTMLInputElement>(null);
 
-  // 썸네일 파일 선택 → 로컬 미리보기 URL 생성
-  function onThumbFile(e: React.ChangeEvent<HTMLInputElement>) {
+  // 썸네일 파일 선택 → 저장 가능한 데이터 URL로 변환
+  // (blob URL은 새로고침 시 무효화되어 영속 데이터로 저장하면 안 된다)
+  async function onThumbFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
-    setThumbnailUrl(URL.createObjectURL(file));
     e.target.value = "";
+    if (!file) return;
+    try {
+      setThumbnailUrl(await fileToDataUrl(file));
+    } catch {
+      toast("이미지 파일을 불러올 수 없습니다.", "error");
+    }
   }
 
   const myItems = user ? auctionService.getItems({ sellerId: user.id }) : [];
@@ -1399,7 +1404,11 @@ function LiveCard({ live, sellerItems }: { live: LiveAuction; sellerItems: Aucti
             </a>
             <button
               type="button"
-              onClick={() => { auctionService.deleteLive(live.id); toast("라이브를 삭제했습니다."); }}
+              onClick={async () => {
+                const res = await auctionService.deleteLive(live.id);
+                if (res.ok) toast("라이브를 삭제했습니다.");
+                else toast(res.error ?? "라이브를 삭제할 수 없습니다.", "error");
+              }}
               className="inline-flex flex-col items-center gap-0.5 rounded-lg border border-red-200 px-2.5 py-2 text-[10px] font-semibold text-red-500 hover:bg-red-50"
             >
               <Trash2 className="h-4 w-4" strokeWidth={1.75} />

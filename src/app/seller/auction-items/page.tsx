@@ -37,7 +37,7 @@ import {
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useToast } from "@/components/providers/ToastProvider";
 import { useStoreVersion } from "@/lib/useStore";
-import { formatPrice, formatDate, cn } from "@/lib/utils";
+import { formatPrice, formatDate, cn, fileToDataUrl } from "@/lib/utils";
 import type { AuctionItem, AuctionItemCondition, AuctionItemStatus } from "@/types";
 
 const NO_IMAGE_STICKERS = [
@@ -485,6 +485,7 @@ function ItemForm({
   submitLabel: string;
 }) {
   const [inner, setInner] = useState<ItemFormValues>(initial);
+  const { toast } = useToast();
   const radioName = useId(); // 폼 인스턴스별 라디오 그룹 분리
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const v = controlled ? initial : inner;
@@ -514,11 +515,17 @@ function ItemForm({
     });
   }
 
-  function onFileSelect(i: number, e: React.ChangeEvent<HTMLInputElement>) {
+  // 파일 선택 → 저장 가능한 데이터 URL로 변환
+  // (blob URL은 새로고침 시 무효화되어 영속 데이터로 저장하면 안 된다)
+  async function onFileSelect(i: number, e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
-    setImage(i, URL.createObjectURL(file));
     e.target.value = "";
+    if (!file) return;
+    try {
+      setImage(i, await fileToDataUrl(file));
+    } catch {
+      toast("이미지 파일을 불러올 수 없습니다.", "error");
+    }
   }
 
   return (

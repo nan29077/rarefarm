@@ -418,15 +418,15 @@ export const reports: Report[] = [
 
 // ---- 경매 상품 ----
 export const auctionItems: AuctionItem[] = [
-  // live1 (진행중 — 식물사냥꾼) 상품 5개
+  // live1 (예정 — 식물사냥꾼) 상품 5개
   { id: "ai1",  sellerId: "u-user", name: "몬스테라 알보 바리에가타 (고착 무늬)", description: "라이브 단독 특가. 뿌리 양호.", categoryId: "c1",  image: "p1-a", startPrice: 200000, bidUnit: 10000, buyNowPrice: 400000, status: "sold",    suspended: false, currentPrice: 320000, winnerName: "파충류마스터", finalPrice: 320000, createdAt: "2026-07-12T09:00:00Z" },
-  { id: "ai2",  sellerId: "u-user", name: "필로덴드론 글로리오숨 (L사이즈)",     description: "벨벳 잎 L사이즈, 뿌리 건강.",  categoryId: "c1",  image: "p3-a", startPrice: 80000,  bidUnit: 5000,  buyNowPrice: 180000, status: "live",    suspended: false, currentPrice: 105000, winnerName: null, finalPrice: null, createdAt: "2026-07-12T09:05:00Z" },
+  { id: "ai2",  sellerId: "u-user", name: "필로덴드론 글로리오숨 (L사이즈)",     description: "벨벳 잎 L사이즈, 뿌리 건강.",  categoryId: "c1",  image: "p3-a", startPrice: 80000,  bidUnit: 5000,  buyNowPrice: 180000, status: "waiting", suspended: false, currentPrice: 80000,  winnerName: null, finalPrice: null, createdAt: "2026-07-12T09:05:00Z" },
   { id: "ai3",  sellerId: "u-user", name: "아글라오네마 레드 스타 (희귀 무늬)",   description: "레드 무늬 희귀 개체.",          categoryId: "c1",  image: "p2-a", startPrice: 60000,  bidUnit: 3000,  buyNowPrice: null,   status: "waiting", suspended: true,  currentPrice: 60000,  winnerName: null, finalPrice: null, createdAt: "2026-07-12T09:10:00Z" },
   { id: "ai4",  sellerId: "u-user", name: "호야 오블로바타 (무늬종)",              description: "무늬 호야 희귀 개체.",           categoryId: "c1",  image: "p1-b", startPrice: 45000,  bidUnit: 3000,  buyNowPrice: 90000,  status: "waiting", suspended: false, currentPrice: 45000,  winnerName: null, finalPrice: null, createdAt: "2026-07-12T09:15:00Z" },
   { id: "ai5",  sellerId: "u-user", name: "분갈이용 나무껍질 믹스 5L",             description: "희귀식물 전용 배합 흙.",         categoryId: "c14", image: "au5",  startPrice: 15000,  bidUnit: 1000,  buyNowPrice: 35000,  status: "waiting", suspended: false, currentPrice: 15000,  winnerName: null, finalPrice: null, createdAt: "2026-07-12T09:20:00Z" },
 
-  // live2 (진행중 — 파충류마스터) 상품 4개
-  { id: "ai6",  sellerId: "u2", name: "레오파드게코 슈퍼설 CB (암컷)",     description: "고품질 CB 개체. CITES 서류 포함.", categoryId: "c8",  image: "p4-a", startPrice: 120000, bidUnit: 5000,  buyNowPrice: 250000, status: "live",    suspended: false, currentPrice: 155000, winnerName: null, finalPrice: null, createdAt: "2026-07-13T09:00:00Z" },
+  // live2 (예정 — 파충류마스터) 상품 4개
+  { id: "ai6",  sellerId: "u2", name: "레오파드게코 슈퍼설 CB (암컷)",     description: "고품질 CB 개체. CITES 서류 포함.", categoryId: "c8",  image: "p4-a", startPrice: 120000, bidUnit: 5000,  buyNowPrice: 250000, status: "waiting", suspended: false, currentPrice: 120000, winnerName: null, finalPrice: null, createdAt: "2026-07-13T09:00:00Z" },
   { id: "ai7",  sellerId: "u2", name: "크레스티드게코 달마시안 모프",       description: "달마 모프 건강 개체.",              categoryId: "c8",  image: "p5-a", startPrice: 80000,  bidUnit: 3000,  buyNowPrice: 160000, status: "waiting", suspended: false, currentPrice: 80000,  winnerName: null, finalPrice: null, createdAt: "2026-07-13T09:05:00Z" },
   { id: "ai8",  sellerId: "u2", name: "볼파이톤 파이볼 모프 (수컷)",        description: "파이볼 희귀 모프.",                 categoryId: "c10", image: "au8",  startPrice: 250000, bidUnit: 10000, buyNowPrice: 500000, status: "waiting", suspended: false, currentPrice: 250000, winnerName: null, finalPrice: null, createdAt: "2026-07-13T09:10:00Z" },
   { id: "ai9",  sellerId: "u2", name: "테라리움 완성 세트 (60cm)",          description: "파충류 전용 60cm 테라리움.",        categoryId: "c14", image: "au9",  startPrice: 80000,  bidUnit: 5000,  buyNowPrice: 180000, status: "waiting", suspended: false, currentPrice: 80000,  winnerName: null, finalPrice: null, createdAt: "2026-07-13T09:15:00Z" },
@@ -457,32 +457,29 @@ export const auctionItems: AuctionItem[] = [
   { id: "ai24", sellerId: "u4", name: "카멜레온 미니 팬서 2종",               description: "소형 팬서 2종 일괄.",                  categoryId: "c9",  image: "au24", startPrice: 250000, bidUnit: 10000, buyNowPrice: 500000, status: "sold",    suspended: false, currentPrice: 380000, winnerName: "레어팜초보", finalPrice: 380000, createdAt: "2026-06-20T09:05:00Z" },
   { id: "ai25", sellerId: "u4", name: "파충류 먹이 패키지 (1개월분)",          description: "귀뚜라미 + 밀웜 혼합 1개월분.",       categoryId: "c15", image: "au25", startPrice: 30000,  bidUnit: 2000,  buyNowPrice: 60000,  status: "failed",  suspended: false, currentPrice: 30000,  winnerName: null, finalPrice: null, createdAt: "2026-06-20T09:10:00Z" },
 
-  // live8 (진행중 — 레어팜브리더) 심야 라이브
-  { id: "ai26", sellerId: "u4", name: "야행성 희귀 도마뱀 레드아이 크록",     description: "야간 라이브 한정 특가.", categoryId: "c8",  image: "au9",  startPrice: 150000, bidUnit: 5000,  buyNowPrice: 300000, status: "live",    suspended: false, currentPrice: 178000, winnerName: null, finalPrice: null, createdAt: "2026-07-17T09:00:00Z" },
+  // live8 (예정 — 레어팜브리더) 심야 라이브
+  { id: "ai26", sellerId: "u4", name: "야행성 희귀 도마뱀 레드아이 크록",     description: "야간 라이브 한정 특가.", categoryId: "c8",  image: "au9",  startPrice: 150000, bidUnit: 5000,  buyNowPrice: 300000, status: "waiting", suspended: false, currentPrice: 150000, winnerName: null, finalPrice: null, createdAt: "2026-07-17T09:00:00Z" },
   { id: "ai27", sellerId: "u4", name: "희귀 괴근식물 랜덤 스페셜 에디션",      description: "야간 라이브 단독. 넘버링 포함.", categoryId: "c4",  image: "au12", startPrice: 80000,  bidUnit: 3000,  buyNowPrice: 180000, status: "waiting", suspended: false, currentPrice: 80000,  winnerName: null, finalPrice: null, createdAt: "2026-07-17T09:05:00Z" },
 ];
 
 // ---- 라이브 경매 방송 ----
 export const liveAuctions: LiveAuction[] = [
-  { id: "live1", sellerId: "u-user", title: "식물사냥꾼의 희귀식물 심야 라이브 경매",         platform: "youtube",   videoUrl: "https://www.youtube.com/watch?v=jfKfPfyJRdk",     itemIds: ["ai1","ai2","ai3","ai4","ai5"],       currentItemIndex: 1, scheduledAt: "2026-07-16T11:00:00Z", status: "live",      viewers: 342, createdAt: "2026-07-12T09:00:00Z", couponIds: ["lc1","lc2"] },
-  { id: "live2", sellerId: "u2",     title: "파충류마스터의 게코 & 볼파이톤 단독 라이브",     platform: "youtube",   videoUrl: "https://www.youtube.com/watch?v=5qap5aO4i9A",     itemIds: ["ai6","ai7","ai8","ai9"],             currentItemIndex: 0, scheduledAt: "2026-07-16T10:30:00Z", status: "live",      viewers: 187, createdAt: "2026-07-13T09:00:00Z" },
+  // 시드 라이브는 서버(.live-data/lives.json)에 존재하지 않아 status "live"로 두면 입찰 시 404가 발생한다.
+  // → "scheduled"로 시드해 실제 방송 시작(setLiveStatus) 시 서버에 upsert된 후에만 진행중이 되도록 한다.
+  { id: "live1", sellerId: "u-user", title: "식물사냥꾼의 희귀식물 심야 라이브 경매",         platform: "youtube",   videoUrl: "https://www.youtube.com/watch?v=jfKfPfyJRdk",     itemIds: ["ai1","ai2","ai3","ai4","ai5"],       currentItemIndex: 0, scheduledAt: "2026-08-20T11:00:00Z", status: "scheduled", viewers: 0,   createdAt: "2026-07-12T09:00:00Z", couponIds: ["lc1","lc2"] },
+  { id: "live2", sellerId: "u2",     title: "파충류마스터의 게코 & 볼파이톤 단독 라이브",     platform: "youtube",   videoUrl: "https://www.youtube.com/watch?v=5qap5aO4i9A",     itemIds: ["ai6","ai7","ai8","ai9"],             currentItemIndex: 0, scheduledAt: "2026-08-21T10:30:00Z", status: "scheduled", viewers: 0,   createdAt: "2026-07-13T09:00:00Z" },
   { id: "live3", sellerId: "u4",     title: "레어팜브리더 거북이 & 카멜레온 경매 라이브",     platform: "youtube",   videoUrl: "https://www.youtube.com/watch?v=21X5lGlDOfg",     itemIds: ["ai10","ai11","ai12"],                currentItemIndex: 0, scheduledAt: "2026-07-17T12:00:00Z", status: "scheduled", viewers: 0,   createdAt: "2026-07-14T09:00:00Z" },
   { id: "live4", sellerId: "u-user", title: "주말 밤 희귀 동식물 복불복 랜덤박스 라이브",     platform: "instagram", videoUrl: "https://www.instagram.com/rarefarm_kr/live",      itemIds: ["ai13","ai14","ai15"],                currentItemIndex: 0, scheduledAt: "2026-07-19T12:00:00Z", status: "scheduled", viewers: 0,   createdAt: "2026-07-15T09:00:00Z" },
   { id: "live5", sellerId: "u-user", title: "7월 첫째주 희귀식물 정리 라이브",                platform: "youtube",   videoUrl: "https://www.youtube.com/watch?v=jfKfPfyJRdk",     itemIds: ["ai16","ai17","ai18","ai19"],         currentItemIndex: 3, scheduledAt: "2026-07-05T12:00:00Z", status: "ended",     viewers: 264, createdAt: "2026-07-04T09:00:00Z" },
   { id: "live6", sellerId: "u2",     title: "파충류마스터 컬렉션 대방출 라이브",              platform: "youtube",   videoUrl: "https://www.youtube.com/watch?v=5qap5aO4i9A",     itemIds: ["ai20","ai21","ai22"],                currentItemIndex: 2, scheduledAt: "2026-06-28T12:00:00Z", status: "ended",     viewers: 198, createdAt: "2026-06-27T09:00:00Z" },
   { id: "live7", sellerId: "u4",     title: "레어팜브리더 희귀 파충류 창고 대개방 라이브",    platform: "instagram", videoUrl: "https://www.instagram.com/rarefarm_kr/live",      itemIds: ["ai23","ai24","ai25"],                currentItemIndex: 2, scheduledAt: "2026-06-20T12:00:00Z", status: "ended",     viewers: 451, createdAt: "2026-06-19T09:00:00Z" },
-  { id: "live8", sellerId: "u4",     title: "레어팜브리더 야심야 희귀 도마뱀 라이브 경매",    platform: "youtube",   videoUrl: "https://www.youtube.com/watch?v=DWcJFNfaw9c",     itemIds: ["ai26","ai27"],                       currentItemIndex: 0, scheduledAt: "2026-07-17T09:00:00Z", status: "live",      viewers: 98,  createdAt: "2026-07-17T09:00:00Z" },
+  { id: "live8", sellerId: "u4",     title: "레어팜브리더 야심야 희귀 도마뱀 라이브 경매",    platform: "youtube",   videoUrl: "https://www.youtube.com/watch?v=DWcJFNfaw9c",     itemIds: ["ai26","ai27"],                       currentItemIndex: 0, scheduledAt: "2026-08-22T12:00:00Z", status: "scheduled", viewers: 0,   createdAt: "2026-07-17T09:00:00Z" },
 ];
 
 // ---- 경매 입찰 기록 ----
 export const auctionBids: AuctionBid[] = [
-  { id: "ab1", liveId: "live1", itemId: "ai2", userId: null, bidderName: "파충류마스터",  price: 88000,  createdAt: "2026-07-16T11:20:00Z" },
-  { id: "ab2", liveId: "live1", itemId: "ai2", userId: null, bidderName: "다육이집사",    price: 96000,  createdAt: "2026-07-16T11:22:00Z" },
-  { id: "ab3", liveId: "live1", itemId: "ai2", userId: null, bidderName: "레어팜브리더",  price: 100000, createdAt: "2026-07-16T11:24:00Z" },
-  { id: "ab4", liveId: "live1", itemId: "ai2", userId: null, bidderName: "파충류마스터",  price: 105000, createdAt: "2026-07-16T11:26:00Z" },
-  { id: "ab5", liveId: "live2", itemId: "ai6", userId: null, bidderName: "식물사냥꾼",    price: 130000, createdAt: "2026-07-16T11:10:00Z" },
-  { id: "ab6", liveId: "live2", itemId: "ai6", userId: null, bidderName: "레어팜초보",    price: 143000, createdAt: "2026-07-16T11:15:00Z" },
-  { id: "ab7", liveId: "live2", itemId: "ai6", userId: null, bidderName: "다육이집사",    price: 155000, createdAt: "2026-07-16T11:21:00Z" },
+  // live1/live2는 "scheduled" 시드로 변경됨 — 시작 전 라이브에 입찰 기록이 있으면 안 되므로
+  // 기존 ab1~ab7(ai2/ai6 대상)은 제거했다. 입찰 기록은 실제 방송 진행 시 서버를 통해 쌓인다.
   // 구매자 테스트 계정의 지난 경매 참여 기록
   { id: "ab8",  liveId: "live5", itemId: "ai16", userId: "u-buyer", bidderName: "희귀생물수집가", price: 220000, createdAt: "2026-07-05T12:30:00Z" },
   { id: "ab9",  liveId: "live5", itemId: "ai19", userId: "u-buyer", bidderName: "희귀생물수집가", price: 310000, createdAt: "2026-07-05T13:00:00Z" },

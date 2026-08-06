@@ -28,6 +28,40 @@ export function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString("ko-KR");
 }
 
+// 이미지 파일 → base64 데이터 URL 변환 (클라이언트 전용).
+// URL.createObjectURL()의 blob URL은 세션 종료/새로고침 시 무효화되어 영속 저장에 쓸 수 없으므로,
+// 저장 가능한 데이터 URL로 변환한다. 저장 용량 절약을 위해 긴 변을 maxDim 이하로 축소한다.
+export function fileToDataUrl(file: File, maxDim = 1280, quality = 0.8): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("이미지 파일을 읽을 수 없습니다."));
+    reader.onload = () => {
+      const dataUrl = String(reader.result ?? "");
+      const img = new Image();
+      img.onerror = () => reject(new Error("이미지를 불러올 수 없습니다."));
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height, 1));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(dataUrl);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        } catch {
+          resolve(dataUrl);
+        }
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("ko-KR", {
     year: "numeric",
